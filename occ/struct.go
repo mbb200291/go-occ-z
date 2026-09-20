@@ -1,5 +1,7 @@
 package occ
 
+// [+] Set
+
 type Set[T comparable] map[T]struct{}
 
 func NewSet[T comparable]() Set[T] {
@@ -18,6 +20,7 @@ func (s Set[T]) Contains(v T) bool {
 func (s Set[T]) Remove(v T) {
 	delete(s, v)
 }
+
 func (s Set[T]) IsDisjoint(other Set[T]) bool {
 	if len(s) > len(other) {
 		return other.IsDisjoint(s)
@@ -32,10 +35,20 @@ func (s Set[T]) IsDisjoint(other Set[T]) bool {
 	return true
 }
 
-type OngoingTxnContainerImp struct {
-	txns []Transaction
-}
+// [-] Set
 
-func (otci *OngoingTxnContainerImp) Txns() []Transaction {
-	return otci.txns
-}
+// type TxnContainerImp struct {
+// 	txns []TransactionRecord
+// }
+
+// func (tci *TxnContainerImp) GetTxns() []TransactionRecord {
+// 	return tci.txns
+// }
+// func (tci *TxnContainerImp) Remove(txn *TransactionRecord) {
+// 	return
+// }
+
+// func (tci *TxnContainerImp) Add(txn *TransactionRecord) {
+// 	tci.txns = append(tci.txns, *txn)
+// 	return
+// }
