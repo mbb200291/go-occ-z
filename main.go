@@ -1,7 +1,10 @@
 package main
 
-import "fmt"
+type Command struct {
+	WriteSet
+	ReadSet
+}
 
 func main() {
-	fmt.Println("Hello, Go!")
+
 }

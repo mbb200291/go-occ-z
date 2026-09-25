@@ -2,6 +2,10 @@ package occ
 
 import "errors"
 
+type Set[T comparable] interface {
+	IsDisjoint(Set[T]) bool
+}
+
 type Transaction interface {
 	GetReadTime() float64
 	GetValidateTime() float64
@@ -14,48 +18,45 @@ type Transaction interface {
 	GetWriteSet() Set[string]
 	GetReadSet() Set[string]
 
-	Read() error
-	Write() error
-}
+	Read() error  // aka. load
+	Write() error // aka. finalize
+	Execute() ([]any, error)
 
-type Operation interface {
-	AsTxn() Transaction
+	GetOutcome() any
 }
 
 type TxnContainer interface {
 	AddTxn(Transaction)
 	RemoveTxn(Transaction)
 	PurgeTxnTill(float64)
-	GetMinReadTimeTxn() Transaction
+	GetMinReadTime() float64
 
 	GetTxns() []Transaction
 }
 
-func Execute(op Operation, prevTxn, ongoingTxn TxnContainer) error {
-	// init txn from op
-	txn := op.AsTxn()
-
+func Execute(txn Transaction, prevTxns, ongoingTxns TxnContainer) error {
 	// register txn to ongoing T and all T
-	txn.SetReadTime()
-	ongoingTxn.AddTxn(txn)
+	ongoingTxns.AddTxn(txn)
 
-	// read phase
+	// read phase -- load read set to private zone
+	txn.SetReadTime()
 	txn.Read()
 
 	// run validate
 	txn.SetValidateTime()
-	outcome := Validate(txn, prevTxn)
-	if !outcome {
+	if outcome := Validate(txn, prevTxns); !outcome {
 		return errors.New("read-write lock")
 	}
 
-	// write phase
+	txn.Execute()
+
+	// write phase -- finalize changes to production zone
 	txn.Write()
 	txn.SetWriteTime()
 
 	// unregister from ongoing T
-	ongoingTxn.RemoveTxn(txn)
-	prevTxn.PurgeTxnTill(txn.GetReadTime())
+	ongoingTxns.RemoveTxn(txn)
+	prevTxns.PurgeTxnTill(ongoingTxns.GetMinReadTime())
 
 	return nil
 }

@@ -1,6 +1,4 @@
-package occ
-
-// [+] Set
+package Set
 
 type Set[T comparable] map[T]struct{}
 
@@ -34,21 +32,3 @@ func (s Set[T]) IsDisjoint(other Set[T]) bool {
 
 	return true
 }
-
-// [-] Set
-
-// type TxnContainerImp struct {
-// 	txns []TransactionRecord
-// }
-
-// func (tci *TxnContainerImp) GetTxns() []TransactionRecord {
-// 	return tci.txns
-// }
-// func (tci *TxnContainerImp) Remove(txn *TransactionRecord) {
-// 	return
-// }
-
-// func (tci *TxnContainerImp) Add(txn *TransactionRecord) {
-// 	tci.txns = append(tci.txns, *txn)
-// 	return
-// }
