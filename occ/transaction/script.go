@@ -1,9 +1,5 @@
 package transaction
 
-import (
-	set "github.com/mbb200291/go-occ-z/occ/set"
-)
-
 type Command interface {
 	IsReadOnly() bool
 	Execute() (any, error)
@@ -12,14 +8,14 @@ type Command interface {
 
 type Script struct {
 	Cmds     []Command
-	ReadSet  set.Set[string]
-	WriteSet set.Set[string]
+	ReadSet  Set[string]
+	WriteSet Set[string]
 }
 
-func (scpt *Script) GetReadSet() set.Set[string] {
+func (scpt *Script) GetReadSet() Set[string] {
 	return scpt.ReadSet
 }
-func (scpt *Script) GetWriteSet() set.Set[string] {
+func (scpt *Script) GetWriteSet() Set[string] {
 	return scpt.WriteSet
 }
 func (scpt *Script) Execute() ([]any, error) {

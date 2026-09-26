@@ -1,9 +1,5 @@
 package transaction
 
-import (
-	set "github.com/mbb200291/go-occ-z/occ/set"
-)
-
 type Context interface {
 	Load(any) error
 	Write(any) error
@@ -12,9 +8,9 @@ type Context interface {
 type Transaction struct {
 	scpt Script
 
-	ReadTime     float64
-	WriteTime    float64
-	ValidateTime float64
+	ReadTime     uint64
+	WriteTime    uint64
+	ValidateTime uint64
 
 	Outcome []any
 
@@ -28,27 +24,27 @@ func NewTransaction(scpt *Script) *Transaction {
 	return &txn
 }
 
-func (txn *Transaction) GetReadTime() float64 {
+func (txn *Transaction) GetReadTime() uint64 {
 	return txn.ReadTime
 }
 
-func (txn *Transaction) GetWriteTime() float64 {
+func (txn *Transaction) GetWriteTime() uint64 {
 	return txn.WriteTime
 }
 
-func (txn *Transaction) GetValidateTime() float64 {
+func (txn *Transaction) GetValidateTime() uint64 {
 	return txn.ValidateTime
 }
 
-func (txn *Transaction) SetReadTime(t float64) {
+func (txn *Transaction) SetReadTime(t uint64) {
 	txn.ReadTime = t
 }
 
-func (txn *Transaction) SetWriteTime(t float64) {
+func (txn *Transaction) SetWriteTime(t uint64) {
 	txn.WriteTime = t
 }
 
-func (txn *Transaction) SetValidateTime(t float64) {
+func (txn *Transaction) SetValidateTime(t uint64) {
 	txn.ValidateTime = t
 }
 

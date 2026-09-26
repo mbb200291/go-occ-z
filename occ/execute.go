@@ -6,10 +6,12 @@ type Set[T comparable] interface {
 	IsDisjoint(Set[T]) bool
 }
 
+type TimeStamp comparable
+
 type Transaction interface {
-	GetReadTime() float64
-	GetValidateTime() float64
-	GetWriteTime() float64
+	GetReadTime() uint64
+	GetValidateTime() uint64
+	GetWriteTime() uint64
 
 	SetReadTime()
 	SetValidateTime()
@@ -28,8 +30,8 @@ type Transaction interface {
 type TxnContainer interface {
 	AddTxn(Transaction)
 	RemoveTxn(Transaction)
-	PurgeTxnTill(float64)
-	GetMinReadTime() float64
+	PurgeTxnTill(uint64)
+	GetMinTxn() uint64
 
 	GetTxns() []Transaction
 }
@@ -56,7 +58,7 @@ func Execute(txn Transaction, prevTxns, ongoingTxns TxnContainer) error {
 
 	// unregister from ongoing T
 	ongoingTxns.RemoveTxn(txn)
-	prevTxns.PurgeTxnTill(ongoingTxns.GetMinReadTime())
+	prevTxns.PurgeTxnTill(ongoingTxns.GetMinTxn())
 
 	return nil
 }
