@@ -27,21 +27,24 @@ type Transaction interface {
 	GetOutcome() any
 }
 
-type TxnContainer interface {
-	AddTxn(Transaction)
-	RemoveTxn(Transaction)
-	PurgeTxnTill(uint64)
-	GetMinTxn() uint64
+type TransactionContainer interface {
+	Add(Transaction)
+	Remove(Transaction)
+	// PurgeTxnTill(uint64)
+	GetMin() uint64
 
-	GetTxns() []Transaction
+	IterTill(uint64, func(*Transaction))
+
+	// GetTxns() []Transaction
 }
 
-func Execute(txn Transaction, prevTxns, ongoingTxns TxnContainer) error {
-	// register txn to ongoing T and all T
-	ongoingTxns.AddTxn(txn)
-
+func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error {
 	// read phase -- load read set to private zone
 	txn.SetReadTime()
+
+	// register txn to ongoing T and all T
+	go ongoingTxns.Add(txn) // ordered by readtime
+
 	txn.Read()
 
 	// run validate
@@ -57,8 +60,8 @@ func Execute(txn Transaction, prevTxns, ongoingTxns TxnContainer) error {
 	txn.SetWriteTime()
 
 	// unregister from ongoing T
-	ongoingTxns.RemoveTxn(txn)
-	prevTxns.PurgeTxnTill(ongoingTxns.GetMinTxn())
+	ongoingTxns.Remove(txn)
+	// prevTxns.PurgeTxnTill(ongoingTxns.GetMin())
 
 	return nil
 }

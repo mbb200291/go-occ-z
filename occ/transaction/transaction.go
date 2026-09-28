@@ -48,12 +48,12 @@ func (txn *Transaction) SetValidateTime(t uint64) {
 	txn.ValidateTime = t
 }
 
-func (txn *Transaction) GetWriteSet() set.Set[string] {
+func (txn *Transaction) GetWriteSet() Set[string] {
 	return txn.scpt.GetWriteSet()
 }
 
-func (txn *Transaction) GetReadSet() set.Set[string] {
-	txn.scpt.GetReadSet()
+func (txn *Transaction) GetReadSet() Set[string] {
+	return txn.scpt.GetReadSet()
 }
 
 func (txn *Transaction) Read() error {

@@ -2,8 +2,8 @@ package transaction
 
 type OrderedMap interface {
 	Add(uint64, *Transaction)
-	Delete(uint64)
-	MapTill(uint64, func(key uint64, value *Transaction) bool)
+	Remove(uint64)
+	IterTill(uint64, func(uint64, *Transaction) bool)
 	GetMin() (*Transaction, bool)
 }
 
@@ -16,14 +16,23 @@ func (tc *TransactionContainer) Add(txn *Transaction) {
 	tc.om.Add(tc.keySelector(txn), txn)
 }
 
-func (tc *TransactionContainer) GetMinTxn() *Transaction {
+func (tc *TransactionContainer) GetMin() (*Transaction, bool) {
 	txn, exist := tc.om.GetMin()
 	if !exist {
-		return nil
+		return nil, false
 	}
-	return txn
+	return txn, true
 }
 
-func NewTransactionContainer() *TransactionContainer {
+func (tc *TransactionContainer) IterTill(
+	timeStamp uint64,
+	callback func(key uint64, value *Transaction) bool) {
+	tc.om.IterTill(timeStamp, callback)
+}
 
+func NewTransactionContainer(om *OrderedMap, keySelector func(*Transaction) uint64) *TransactionContainer {
+	return &TransactionContainer{
+		om:          *om,
+		keySelector: keySelector,
+	}
 }

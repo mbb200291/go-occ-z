@@ -22,7 +22,7 @@ func (s *SkipMap) Delete(key uint64) {
 	s.m.Delete(key)
 }
 
-func (s *SkipMap) MapTill(
+func (s *SkipMap) IterTill(
 	end uint64,
 	fn func(key uint64, value *Transaction) bool,
 ) {
@@ -37,13 +37,15 @@ func (s *SkipMap) MapTill(
 
 func (s *SkipMap) GetMin() (*Transaction, bool) {
 	var min *Transaction
+	var ok bool
 
 	s.m.Range(func(_ uint64, value *Transaction) bool {
 		min = value
+		ok = true
 		return false
 	})
 
-	return min, true
+	return min, ok
 }
 
 var _ OrderedMap = (*SkipMap)(nil)
