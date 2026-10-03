@@ -18,7 +18,7 @@ func (s *SkipMap) Add(key uint64, value *Transaction) {
 	s.m.Store(key, value)
 }
 
-func (s *SkipMap) Delete(key uint64) {
+func (s *SkipMap) Remove(key uint64) {
 	s.m.Delete(key)
 }
 
