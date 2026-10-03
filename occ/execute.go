@@ -1,6 +1,15 @@
 package occ
 
-import "errors"
+import (
+	"errors"
+	"sync/atomic"
+)
+
+var timestamp atomic.Uint64
+
+func NextTimestamp() uint64 {
+	return timestamp.Add(1)
+}
 
 type Set[T comparable] interface {
 	IsDisjoint(Set[T]) bool
@@ -13,9 +22,9 @@ type Transaction interface {
 	GetValidateTime() uint64
 	GetWriteTime() uint64
 
-	SetReadTime()
-	SetValidateTime()
-	SetWriteTime()
+	SetReadTime(uint64)
+	SetValidateTime(uint64)
+	SetWriteTime(uint64)
 
 	GetWriteSet() Set[string]
 	GetReadSet() Set[string]
@@ -40,7 +49,7 @@ type TransactionContainer interface {
 
 func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error {
 	// read phase -- load read set to private zone
-	txn.SetReadTime()
+	txn.SetReadTime(NextTimestamp())
 
 	// register txn to ongoing T and all T
 	go ongoingTxns.Add(txn) // ordered by readtime
@@ -48,7 +57,7 @@ func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error 
 	txn.Read()
 
 	// run validate
-	txn.SetValidateTime()
+	txn.SetValidateTime(NextTimestamp())
 	if outcome := Validate(txn, prevTxns); !outcome {
 		return errors.New("read-write lock")
 	}
@@ -57,7 +66,7 @@ func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error 
 
 	// write phase -- finalize changes to production zone
 	txn.Write()
-	txn.SetWriteTime()
+	txn.SetWriteTime(NextTimestamp())
 
 	// unregister from ongoing T
 	ongoingTxns.Remove(txn)
