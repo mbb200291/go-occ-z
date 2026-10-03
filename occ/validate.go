@@ -19,10 +19,15 @@ func Validate(curTxn Transaction, prevTxns TransactionContainer) bool {
 	outcome := true
 	prevTxns.IterTill(
 		curTxn.GetValidateTime(),
-		func(curTxn Transaction) {
+		func(prevKey uint64, prevTxn Transaction) bool {
 			outcome = outcome && validatePair(prevTxn, curTxn)
+			if !outcome {
+				return false
+			}
+			return true
 		},
 	)
+	return outcome
 }
 
 // func Validate(curTxn Transaction, prevTxns TransactionContainer) bool {

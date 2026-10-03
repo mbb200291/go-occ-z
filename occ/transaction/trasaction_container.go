@@ -3,7 +3,7 @@ package transaction
 type OrderedMap interface {
 	Add(uint64, *Transaction)
 	Remove(uint64)
-	IterTill(uint64, func(uint64, *Transaction) bool)
+	IterTill(uint64, func(key uint64, value *Transaction) bool)
 	GetMin() (*Transaction, bool)
 }
 
@@ -26,7 +26,7 @@ func (tc *TransactionContainer) GetMin() (*Transaction, bool) {
 
 func (tc *TransactionContainer) IterTill(
 	timeStamp uint64,
-	callback func(key uint64, value *Transaction) bool) {
+	callback func(key uint64, value *Transaction) bool) { // assumpt the ordered map can feed each item into cb. cb can early stop iteration by return false
 	tc.om.IterTill(timeStamp, callback)
 }
 

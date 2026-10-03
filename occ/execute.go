@@ -33,7 +33,7 @@ type TransactionContainer interface {
 	// PurgeTxnTill(uint64)
 	GetMin() uint64
 
-	IterTill(uint64, func(*Transaction))
+	IterTill(uint64, func(uint64, Transaction) bool)
 
 	// GetTxns() []Transaction
 }

@@ -30,8 +30,10 @@ func (s *SkipMap) IterTill(
 		if key > end {
 			return false
 		}
-
-		return fn(key, value)
+		if ok := fn(key, value); !ok {
+			return false
+		}
+		return true
 	})
 }
 
