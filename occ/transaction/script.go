@@ -2,7 +2,7 @@ package transaction
 
 type Command interface {
 	IsReadOnly() bool
-	Execute(Context) (any, error)
+	Execute(Context) error
 	GetTargets() []string
 }
 
@@ -18,16 +18,14 @@ func (scpt *Script) GetReadSet() Set[string] {
 func (scpt *Script) GetWriteSet() Set[string] {
 	return scpt.WriteSet
 }
-func (scpt *Script) Execute(ctx Context) ([]any, error) {
-	outcome := []any{}
+func (scpt *Script) Execute(ctx Context) error {
 	for _, cmd := range scpt.Cmds {
-		out, err := cmd.Execute(ctx)
+		err := cmd.Execute(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		outcome = append(outcome, out)
 	}
-	return outcome, nil
+	return nil
 }
 
 func NewScript(cmds []Command) *Script {

@@ -18,12 +18,13 @@ type Transaction struct {
 	ctx Context
 }
 
-func NewTransaction(scpt *Script) *Transaction {
+func NewTransaction(scpt *Script, ctx Context) *Transaction {
 	txn := Transaction{
 		scpt:         *scpt,
 		ReadTime:     uint64(math.MaxUint64),
 		ValidateTime: uint64(math.MaxUint64),
 		WriteTime:    uint64(math.MaxUint64),
+		ctx:          ctx,
 	}
 	return &txn
 }
@@ -78,8 +79,9 @@ func (txn *Transaction) Write() error {
 	return nil
 }
 
-func (txn *Transaction) Execute() ([]any, error) { // to be overwrite
-	return txn.scpt.Execute(txn.ctx)
+func (txn *Transaction) Execute() error { // to be overwrite
+	err := txn.scpt.Execute(txn.ctx)
+	return err
 }
 
 func (txn *Transaction) GetOutcomes() ([]any, error) {

@@ -14,5 +14,6 @@ func (cmdb *CommandBase) GetTargets() []string {
 }
 
 func (cmdb *CommandBase) Execute(tctx Context) (any, error) {
+	// should write computation to private zone
 	return nil, nil
 }

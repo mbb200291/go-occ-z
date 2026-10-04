@@ -32,7 +32,7 @@ type Transaction interface {
 
 	Read() error  // aka. load
 	Write() error // aka. finalize
-	Execute() ([]any, error)
+	Execute() error
 
 	GetOutcomes() ([]any, error)
 }
@@ -77,7 +77,10 @@ func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error 
 		return errors.New("read-write lock")
 	}
 
-	txn.Execute()
+	err := txn.Execute()
+	if err != nil {
+		return err
+	}
 
 	// write phase -- finalize changes to production zone
 	txn.Write()
