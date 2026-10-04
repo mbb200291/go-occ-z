@@ -8,14 +8,14 @@ type Command interface {
 
 type Script struct {
 	Cmds     []Command
-	ReadSet  Set[string]
-	WriteSet Set[string]
+	ReadSet  Set
+	WriteSet Set
 }
 
-func (scpt *Script) GetReadSet() Set[string] {
+func (scpt *Script) GetReadSet() Set {
 	return scpt.ReadSet
 }
-func (scpt *Script) GetWriteSet() Set[string] {
+func (scpt *Script) GetWriteSet() Set {
 	return scpt.WriteSet
 }
 func (scpt *Script) Execute(ctx Context) error {
@@ -31,8 +31,8 @@ func (scpt *Script) Execute(ctx Context) error {
 func NewScript(cmds []Command) *Script {
 	scpt := Script{
 		Cmds:     cmds,
-		ReadSet:  NewSet[string](),
-		WriteSet: NewSet[string](),
+		ReadSet:  NewSet(),
+		WriteSet: NewSet(),
 	}
 	for _, c := range cmds {
 		if c.IsReadOnly() {

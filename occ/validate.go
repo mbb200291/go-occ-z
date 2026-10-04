@@ -7,8 +7,7 @@ func validatePair(prevTxn, curTxn Transaction) bool {
 	} else if (prevTxn.GetWriteTime() < curTxn.GetWriteTime()) && // rule 2: prevTxn's write time earlier than g2's and prevTxn's write set disjoin to curTxn's read set
 		(prevTxn.GetWriteSet().IsDisjoint(curTxn.GetReadSet())) {
 		return true
-	} else if (prevTxn.GetReadTime() < curTxn.GetReadTime()) && // rule 3: prevTxn's read time earlier than curTxn's and prevTxn's write set disjoin to curTxn's read set and write set
-		(prevTxn.GetWriteSet().IsDisjoint(curTxn.GetReadSet())) &&
+	} else if (prevTxn.GetWriteSet().IsDisjoint(curTxn.GetReadSet())) && // rule 3: prevTxn complete read phase earlier than curTxn's (i use validate time order to acheive this rule) and prevTxn's write set disjoin to curTxn's read set and write set
 		(prevTxn.GetWriteSet().IsDisjoint(curTxn.GetWriteSet())) {
 		return true
 	}

@@ -2,6 +2,7 @@ package occ
 
 import (
 	"errors"
+	"iter"
 	"math"
 	"sync/atomic"
 )
@@ -12,8 +13,10 @@ func NextTimestamp() uint64 {
 	return timestamp.Add(1)
 }
 
-type Set[T comparable] interface {
-	IsDisjoint(Set[T]) bool
+type Set interface {
+	IsDisjoint(Set) bool
+	Contains(string) bool
+	All() iter.Seq[string]
 }
 
 type TimeStamp comparable
@@ -27,8 +30,8 @@ type Transaction interface {
 	SetValidateTime(uint64)
 	SetWriteTime(uint64)
 
-	GetWriteSet() Set[string]
-	GetReadSet() Set[string]
+	GetWriteSet() Set
+	GetReadSet() Set
 
 	Read() error  // aka. load
 	Write() error // aka. finalize

@@ -3,8 +3,8 @@ package transaction
 import "math"
 
 type Context interface {
-	Load(any) error
-	Write(any) error
+	Load(string) error
+	Write(string) error
 	GetOutcomes() ([]any, error)
 }
 
@@ -53,16 +53,16 @@ func (txn *Transaction) SetValidateTime(t uint64) {
 	txn.ValidateTime = t
 }
 
-func (txn *Transaction) GetWriteSet() Set[string] {
+func (txn *Transaction) GetWriteSet() Set {
 	return txn.scpt.GetWriteSet()
 }
 
-func (txn *Transaction) GetReadSet() Set[string] {
+func (txn *Transaction) GetReadSet() Set {
 	return txn.scpt.GetReadSet()
 }
 
 func (txn *Transaction) Read() error {
-	for t := range txn.scpt.GetReadSet() {
+	for t := range txn.scpt.GetReadSet().All() {
 		if err := txn.ctx.Load(t); err != nil {
 			return err
 		}
@@ -71,6 +71,7 @@ func (txn *Transaction) Read() error {
 }
 
 func (txn *Transaction) Write() error {
+	// TODO: need add rollback logic when fail in middle
 	for t := range txn.scpt.GetWriteSet() {
 		if err := txn.ctx.Write(t); err != nil {
 			return err
