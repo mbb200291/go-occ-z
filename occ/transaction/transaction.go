@@ -1,5 +1,7 @@
 package transaction
 
+import "math"
+
 type Context interface {
 	Load(any) error
 	Write(any) error
@@ -18,7 +20,10 @@ type Transaction struct {
 
 func NewTransaction(scpt *Script) *Transaction {
 	txn := Transaction{
-		scpt: *scpt,
+		scpt:         *scpt,
+		ReadTime:     uint64(math.MaxUint64),
+		ValidateTime: uint64(math.MaxUint64),
+		WriteTime:    uint64(math.MaxUint64),
 	}
 	return &txn
 }
@@ -56,7 +61,7 @@ func (txn *Transaction) GetReadSet() Set[string] {
 }
 
 func (txn *Transaction) Read() error {
-	for _, t := range txn.scpt.GetReadSet() {
+	for t := range txn.scpt.GetReadSet() {
 		if err := txn.ctx.Load(t); err != nil {
 			return err
 		}
@@ -65,7 +70,7 @@ func (txn *Transaction) Read() error {
 }
 
 func (txn *Transaction) Write() error {
-	for _, t := range txn.scpt.GetWriteSet() {
+	for t := range txn.scpt.GetWriteSet() {
 		if err := txn.ctx.Write(t); err != nil {
 			return err
 		}

@@ -2,6 +2,7 @@ package occ
 
 import (
 	"errors"
+	"math"
 	"sync/atomic"
 )
 
@@ -18,9 +19,9 @@ type Set[T comparable] interface {
 type TimeStamp comparable
 
 type Transaction interface {
-	GetReadTime() uint64
-	GetValidateTime() uint64
-	GetWriteTime() uint64
+	GetReadTime() uint64     // readtime will init as inf
+	GetValidateTime() uint64 // validatetime will init as inf
+	GetWriteTime() uint64    // writetime will init as inf
 
 	SetReadTime(uint64)
 	SetValidateTime(uint64)
@@ -33,14 +34,14 @@ type Transaction interface {
 	Write() error // aka. finalize
 	Execute() ([]any, error)
 
-	GetOutcomes() any
+	GetOutcomes() ([]any, error)
 }
 
 type TransactionContainer interface {
 	Add(Transaction)
 	Remove(Transaction)
 	// PurgeTxnTill(uint64)
-	GetMin() uint64
+	GetMin() (Transaction, bool)
 
 	IterTill(uint64, func(uint64, Transaction) bool)
 
@@ -48,17 +49,31 @@ type TransactionContainer interface {
 }
 
 func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error {
+	// add txn to prevTxn
+	go prevTxns.Add(txn)
+
+	// register txn to ongoing T and all T
+	ongoingTxns.Add(txn) // ordered by readtime
+
+	// unregister from ongoing T
+	defer ongoingTxns.Remove(txn)
+
 	// read phase -- load read set to private zone
 	txn.SetReadTime(NextTimestamp())
 
-	// register txn to ongoing T and all T
-	go ongoingTxns.Add(txn) // ordered by readtime
-
 	txn.Read()
 
-	// run validate
+	// set validate
 	txn.SetValidateTime(NextTimestamp())
-	if outcome := Validate(txn, prevTxns, ongoingTxns.GetMin().GetReadTime()); !outcome {
+
+	// prepare purge write time till to
+	minTxnReadTime := uint64(math.MaxInt64)
+	if minTxn, exist := ongoingTxns.GetMin(); exist {
+		minTxnReadTime = minTxn.GetReadTime()
+	}
+
+	// run validate
+	if outcome := Validate(txn, prevTxns, minTxnReadTime); !outcome {
 		return errors.New("read-write lock")
 	}
 
@@ -67,9 +82,6 @@ func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error 
 	// write phase -- finalize changes to production zone
 	txn.Write()
 	txn.SetWriteTime(NextTimestamp())
-
-	// unregister from ongoing T
-	ongoingTxns.Remove(txn)
 
 	return nil
 }

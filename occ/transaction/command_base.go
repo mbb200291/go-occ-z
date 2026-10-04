@@ -13,6 +13,6 @@ func (cmdb *CommandBase) GetTargets() []string {
 	return cmdb.targets
 }
 
-func (cmdb *CommandBase) Execute(tctx Context) (*any, error) {
+func (cmdb *CommandBase) Execute(tctx Context) (any, error) {
 	return nil, nil
 }
