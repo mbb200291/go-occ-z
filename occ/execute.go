@@ -58,7 +58,7 @@ func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error 
 
 	// run validate
 	txn.SetValidateTime(NextTimestamp())
-	if outcome := Validate(txn, prevTxns); !outcome {
+	if outcome := Validate(txn, prevTxns, ongoingTxns.GetMin().GetReadTime()); !outcome {
 		return errors.New("read-write lock")
 	}
 
@@ -70,7 +70,6 @@ func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error 
 
 	// unregister from ongoing T
 	ongoingTxns.Remove(txn)
-	// prevTxns.PurgeTxnTill(ongoingTxns.GetMin())
 
 	return nil
 }

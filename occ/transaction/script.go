@@ -3,7 +3,7 @@ package transaction
 type Command interface {
 	IsReadOnly() bool
 	Execute(Context) (any, error)
-	GetTarget() string
+	GetTargets() []string
 }
 
 type Script struct {
@@ -38,9 +38,9 @@ func NewScript(cmds []Command) *Script {
 	}
 	for _, c := range cmds {
 		if c.IsReadOnly() {
-			scpt.ReadSet.Add(c.GetTarget())
+			scpt.ReadSet.Add(c.GetTargets())
 		} else {
-			scpt.WriteSet.Add(c.GetTarget())
+			scpt.WriteSet.Add(c.GetTargets())
 		}
 	}
 	return &scpt

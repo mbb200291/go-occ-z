@@ -6,8 +6,10 @@ func NewSet[T comparable]() Set[T] {
 	return make(Set[T])
 }
 
-func (s Set[T]) Add(v T) {
-	s[v] = struct{}{}
+func (s Set[T]) Add(vs []T) {
+	for _, v := range vs {
+		s[v] = struct{}{}
+	}
 }
 
 func (s Set[T]) Contains(v T) bool {

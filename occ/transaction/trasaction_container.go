@@ -24,6 +24,10 @@ func (tc *TransactionContainer) GetMin() (*Transaction, bool) {
 	return txn, true
 }
 
+func (tc *TransactionContainer) Remove(txn *Transaction) {
+	tc.om.Remove(tc.keySelector(txn))
+}
+
 func (tc *TransactionContainer) IterTill(
 	timeStamp uint64,
 	callback func(key uint64, value *Transaction) bool) { // assumpt the ordered map can feed each item into cb. cb can early stop iteration by return false

@@ -15,8 +15,10 @@ func validatePair(prevTxn, curTxn Transaction) bool {
 	return false
 }
 
-func Validate(curTxn Transaction, prevTxns TransactionContainer) bool {
+func Validate(curTxn Transaction, prevTxns TransactionContainer, minReadTimeOgTxns uint64) bool {
 	outcome := true
+
+	// validate
 	prevTxns.IterTill(
 		curTxn.GetValidateTime(),
 		func(prevKey uint64, prevTxn Transaction) bool {
@@ -24,9 +26,14 @@ func Validate(curTxn Transaction, prevTxns TransactionContainer) bool {
 			if !outcome {
 				return false
 			}
+			// remove txn which write time early than onging txn's read time
+			if prevTxn.GetWriteTime() < minReadTimeOgTxns {
+				prevTxns.Remove(prevTxn)
+			}
 			return true
 		},
 	)
+
 	return outcome
 }
 
