@@ -33,7 +33,7 @@ type Transaction interface {
 	Write() error // aka. finalize
 	Execute() ([]any, error)
 
-	GetOutcome() any
+	GetOutcomes() any
 }
 
 type TransactionContainer interface {

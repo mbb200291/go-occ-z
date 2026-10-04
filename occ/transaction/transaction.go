@@ -3,6 +3,7 @@ package transaction
 type Context interface {
 	Load(any) error
 	Write(any) error
+	GetOutcomes() ([]any, error)
 }
 
 type Transaction struct {
@@ -12,9 +13,7 @@ type Transaction struct {
 	WriteTime    uint64
 	ValidateTime uint64
 
-	Outcome []any
-
-	Ctx Context
+	ctx Context
 }
 
 func NewTransaction(scpt *Script) *Transaction {
@@ -58,7 +57,7 @@ func (txn *Transaction) GetReadSet() Set[string] {
 
 func (txn *Transaction) Read() error {
 	for _, t := range txn.scpt.GetReadSet() {
-		if err := txn.Ctx.Load(t); err != nil {
+		if err := txn.ctx.Load(t); err != nil {
 			return err
 		}
 	}
@@ -67,7 +66,7 @@ func (txn *Transaction) Read() error {
 
 func (txn *Transaction) Write() error {
 	for _, t := range txn.scpt.GetWriteSet() {
-		if err := txn.Ctx.Write(t); err != nil {
+		if err := txn.ctx.Write(t); err != nil {
 			return err
 		}
 	}
@@ -75,9 +74,9 @@ func (txn *Transaction) Write() error {
 }
 
 func (txn *Transaction) Execute() ([]any, error) { // to be overwrite
-	return txn.scpt.Execute()
+	return txn.scpt.Execute(txn.ctx)
 }
 
-func (txn *Transaction) GetOutcome() any {
-	return txn.Outcome
+func (txn *Transaction) GetOutcomes() ([]any, error) {
+	return txn.ctx.GetOutcomes()
 }

@@ -2,7 +2,7 @@ package transaction
 
 type Command interface {
 	IsReadOnly() bool
-	Execute() (any, error)
+	Execute(Context) (any, error)
 	GetTarget() string
 }
 
@@ -18,10 +18,10 @@ func (scpt *Script) GetReadSet() Set[string] {
 func (scpt *Script) GetWriteSet() Set[string] {
 	return scpt.WriteSet
 }
-func (scpt *Script) Execute() ([]any, error) {
+func (scpt *Script) Execute(ctx Context) ([]any, error) {
 	outcome := []any{}
 	for _, cmd := range scpt.Cmds {
-		out, err := cmd.Execute()
+		out, err := cmd.Execute(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -33,8 +33,8 @@ func (scpt *Script) Execute() ([]any, error) {
 func NewScript(cmds []Command) *Script {
 	scpt := Script{
 		Cmds:     cmds,
-		ReadSet:  set.NewSet[string](),
-		WriteSet: set.NewSet[string](),
+		ReadSet:  NewSet[string](),
+		WriteSet: NewSet[string](),
 	}
 	for _, c := range cmds {
 		if c.IsReadOnly() {
