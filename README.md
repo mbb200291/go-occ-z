@@ -6,4 +6,6 @@ Using skip-list (github.com/zhangyunhao116/skipmap) to ensure fast add, remove a
 
 Implement from the lecture: [Lecture #18: Timestamp Ordering Concurrency Control](https://15445.courses.cs.cmu.edu/fall2024/schedule.html)
 
-This product is still under development.
+
+> [!WARNING]
+This project is currently under development and should not be used in production.
