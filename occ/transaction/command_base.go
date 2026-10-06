@@ -1,11 +1,16 @@
 package transaction
 
 type CommandBase struct {
-	readOnly bool
-	targets  []string
+	readOnly  bool
+	writeOnly bool
+	targets   []string
 }
 
 func (cmdb *CommandBase) IsReadOnly() bool {
+	return cmdb.readOnly
+}
+
+func (cmdb *CommandBase) IsWriteOnly() bool {
 	return cmdb.readOnly
 }
 
