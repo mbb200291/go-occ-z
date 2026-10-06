@@ -38,7 +38,7 @@ func NewScript(cmds []Command) *Script {
 	for _, c := range cmds {
 		if c.IsReadOnly() {
 			scpt.ReadSet.Add(c.GetTargets())
-		if c.IsWriteOnly() {
+		} else if c.IsWriteOnly() {
 			scpt.WriteSet.Add(c.GetTargets())
 		} else {
 			scpt.ReadSet.Add(c.GetTargets())
