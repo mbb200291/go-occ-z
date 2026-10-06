@@ -4,11 +4,14 @@ import (
 	"errors"
 	"iter"
 	"math"
+	"sync"
 	"sync/atomic"
 )
 
 var timestamp atomic.Uint64
 var maxtimestamp atomic.Uint64
+var muR sync.RWMutex
+var muV sync.RWMutex
 
 func NextTimestamp() uint64 {
 	return timestamp.Add(1)
@@ -16,6 +19,9 @@ func NextTimestamp() uint64 {
 
 func init() {
 	maxtimestamp.Store(math.MaxUint64)
+	muR = sync.RWMutex{}
+	muV = sync.RWMutex{}
+
 }
 
 func NextMaxTimestamp() uint64 {
@@ -60,16 +66,13 @@ type TransactionContainer interface {
 // prevTxn should use validate time as key
 // ongoingTxn should use read time as key
 func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error {
+	muR.Lock()
 	// read phase -- load read set to private zone
 	txn.SetReadTime(NextTimestamp())
-	txn.SetValidateTime(NextMaxTimestamp())
-	txn.SetWriteTime(NextMaxTimestamp())
 
 	// register txn to ongoing T and all T
 	ongoingTxns.Add(txn) // ordered by readtime
-
-	// add txn to prevTxn
-	prevTxns.Add(txn)
+	muR.Unlock()
 
 	// unregister from ongoing T
 	defer ongoingTxns.Remove(txn)
@@ -79,8 +82,20 @@ func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error 
 		return err
 	}
 
+	// execute transaction optimicaly
+	err = txn.Execute()
+	if err != nil {
+		return err
+	}
+
 	// set validate
+	muV.Lock()
 	txn.SetValidateTime(NextTimestamp())
+
+	// add txn to prevTxn
+	prevTxns.Add(txn)
+	defer prevTxns.Remove(txn)
+	muV.Unlock()
 
 	// prepare purge write time till to
 	minTxnReadTime := uint64(math.MaxInt64)
@@ -91,11 +106,6 @@ func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error 
 	// run validate
 	if outcome := Validate(txn, prevTxns, minTxnReadTime); !outcome {
 		return errors.New("read-write lock")
-	}
-
-	err = txn.Execute()
-	if err != nil {
-		return err
 	}
 
 	// write phase -- finalize changes to production zone
