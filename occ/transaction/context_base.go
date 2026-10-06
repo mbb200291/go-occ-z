@@ -5,11 +5,11 @@ type ContextBase struct {
 	err      error
 }
 
-func (ctxb *ContextBase) Write(any) error {
+func (ctxb *ContextBase) Write(string) error {
 	return nil
 }
 
-func (ctxb *ContextBase) Load(any) error {
+func (ctxb *ContextBase) Load(string) error {
 	return nil
 }
 

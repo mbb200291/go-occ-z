@@ -2,6 +2,7 @@ package transaction
 
 type Command interface {
 	IsReadOnly() bool
+	IsWriteOnly() bool
 	Execute(Context) error
 	GetTargets() []string
 }
@@ -37,7 +38,10 @@ func NewScript(cmds []Command) *Script {
 	for _, c := range cmds {
 		if c.IsReadOnly() {
 			scpt.ReadSet.Add(c.GetTargets())
+		if c.IsWriteOnly() {
+			scpt.WriteSet.Add(c.GetTargets())
 		} else {
+			scpt.ReadSet.Add(c.GetTargets())
 			scpt.WriteSet.Add(c.GetTargets())
 		}
 	}

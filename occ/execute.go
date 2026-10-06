@@ -43,17 +43,16 @@ type Transaction interface {
 type TransactionContainer interface {
 	Add(Transaction)
 	Remove(Transaction)
-	// PurgeTxnTill(uint64)
 	GetMin() (Transaction, bool)
 
 	IterTill(uint64, func(uint64, Transaction) bool)
-
-	// GetTxns() []Transaction
 }
 
+// prevTxn should use validate time as key
+// ongoingTxn should use read time as key
 func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error {
-	// add txn to prevTxn
-	go prevTxns.Add(txn)
+	// read phase -- load read set to private zone
+	txn.SetReadTime(NextTimestamp())
 
 	// register txn to ongoing T and all T
 	ongoingTxns.Add(txn) // ordered by readtime
@@ -61,13 +60,16 @@ func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error 
 	// unregister from ongoing T
 	defer ongoingTxns.Remove(txn)
 
-	// read phase -- load read set to private zone
-	txn.SetReadTime(NextTimestamp())
-
-	txn.Read()
+	err := txn.Read()
+	if err != nil {
+		return err
+	}
 
 	// set validate
 	txn.SetValidateTime(NextTimestamp())
+
+	// add txn to prevTxn
+	prevTxns.Add(txn)
 
 	// prepare purge write time till to
 	minTxnReadTime := uint64(math.MaxInt64)
@@ -80,13 +82,18 @@ func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error 
 		return errors.New("read-write lock")
 	}
 
-	err := txn.Execute()
+	err = txn.Execute()
 	if err != nil {
 		return err
 	}
 
 	// write phase -- finalize changes to production zone
-	txn.Write()
+	err = txn.Write()
+	if err != nil {
+		prevTxns.Remove(txn)
+		return err
+	}
+
 	txn.SetWriteTime(NextTimestamp())
 
 	return nil

@@ -13,7 +13,7 @@ func (cmdb *CommandBase) GetTargets() []string {
 	return cmdb.targets
 }
 
-func (cmdb *CommandBase) Execute(tctx Context) (any, error) {
+func (cmdb *CommandBase) Execute(tctx Context) error {
 	// should write computation to private zone
-	return nil, nil
+	return nil
 }
