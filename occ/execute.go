@@ -8,9 +8,18 @@ import (
 )
 
 var timestamp atomic.Uint64
+var maxtimestamp atomic.Uint64
 
 func NextTimestamp() uint64 {
 	return timestamp.Add(1)
+}
+
+func init() {
+	maxtimestamp.Store(math.MaxUint64)
+}
+
+func NextMaxTimestamp() uint64 {
+	return maxtimestamp.Add(^uint64(0))
 }
 
 type Set interface {
@@ -53,9 +62,14 @@ type TransactionContainer interface {
 func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error {
 	// read phase -- load read set to private zone
 	txn.SetReadTime(NextTimestamp())
+	txn.SetValidateTime(NextMaxTimestamp())
+	txn.SetWriteTime(NextMaxTimestamp())
 
 	// register txn to ongoing T and all T
 	ongoingTxns.Add(txn) // ordered by readtime
+
+	// add txn to prevTxn
+	prevTxns.Add(txn)
 
 	// unregister from ongoing T
 	defer ongoingTxns.Remove(txn)
@@ -67,9 +81,6 @@ func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error 
 
 	// set validate
 	txn.SetValidateTime(NextTimestamp())
-
-	// add txn to prevTxn
-	prevTxns.Add(txn)
 
 	// prepare purge write time till to
 	minTxnReadTime := uint64(math.MaxInt64)
