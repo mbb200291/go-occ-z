@@ -1,6 +1,11 @@
 package transaction
 
-import "math"
+import (
+	"math"
+	"sync/atomic"
+
+	"github.com/mbb200291/go-occ-z/occ"
+)
 
 type Context interface {
 	Load(string) error
@@ -11,55 +16,57 @@ type Context interface {
 type Transaction struct {
 	scpt Script
 
-	ReadTime     uint64
-	WriteTime    uint64
-	ValidateTime uint64
+	readTime     atomic.Uint64
+	writeTime    atomic.Uint64
+	validateTime atomic.Uint64
 
 	ctx Context
 }
 
 func NewTransaction(scpt *Script, ctx Context) *Transaction {
-	txn := Transaction{
-		scpt:         *scpt,
-		ReadTime:     uint64(math.MaxUint64),
-		ValidateTime: uint64(math.MaxUint64),
-		WriteTime:    uint64(math.MaxUint64),
-		ctx:          ctx,
+	txn := &Transaction{
+		scpt: *scpt,
+		ctx:  ctx,
 	}
-	return &txn
+	txn.readTime.Store(math.MaxUint64)
+	txn.validateTime.Store(math.MaxUint64)
+	txn.writeTime.Store(math.MaxUint64)
+	return txn
 }
 
 func (txn *Transaction) GetReadTime() uint64 {
-	return txn.ReadTime
+	return txn.readTime.Load()
 }
 
 func (txn *Transaction) GetWriteTime() uint64 {
-	return txn.WriteTime
+	return txn.writeTime.Load()
 }
 
 func (txn *Transaction) GetValidateTime() uint64 {
-	return txn.ValidateTime
+	return txn.validateTime.Load()
 }
 
 func (txn *Transaction) SetReadTime(t uint64) {
-	txn.ReadTime = t
+	txn.readTime.Store(t)
 }
 
 func (txn *Transaction) SetWriteTime(t uint64) {
-	txn.WriteTime = t
+	txn.writeTime.Store(t)
 }
 
 func (txn *Transaction) SetValidateTime(t uint64) {
-	txn.ValidateTime = t
+	txn.validateTime.Store(t)
 }
 
-func (txn *Transaction) GetWriteSet() Set {
+func (txn *Transaction) GetWriteSet() occ.Set {
 	return txn.scpt.GetWriteSet()
 }
 
-func (txn *Transaction) GetReadSet() Set {
+func (txn *Transaction) GetReadSet() occ.Set {
 	return txn.scpt.GetReadSet()
 }
+
+var _ occ.Transaction = (*Transaction)(nil)
 
 func (txn *Transaction) Read() error {
 	for t := range txn.scpt.GetReadSet().All() {
