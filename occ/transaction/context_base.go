@@ -10,6 +10,22 @@ func (ctxb *ContextBase) Write(string) error {
 }
 
 func (ctxb *ContextBase) Load(string) error {
+	// Have to implement
+	return nil
+}
+
+func (ctxb *ContextBase) Backup(string) error {
+	// Have to implement
+	return nil
+}
+
+func (ctxb *ContextBase) Revert(string) error {
+	// Have to implement
+	return nil
+}
+
+func (ctxb *ContextBase) DiscardBackup(string) error {
+	// Have to implement
 	return nil
 }
 

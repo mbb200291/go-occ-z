@@ -9,7 +9,8 @@ import (
 )
 
 var timestamp atomic.Uint64
-var maxtimestamp atomic.Uint64
+
+// var maxtimestamp atomic.Uint64
 var muR sync.RWMutex
 var muV sync.RWMutex
 
@@ -18,15 +19,15 @@ func NextTimestamp() uint64 {
 }
 
 func init() {
-	maxtimestamp.Store(math.MaxUint64)
+	// maxtimestamp.Store(math.MaxUint64)
 	muR = sync.RWMutex{}
 	muV = sync.RWMutex{}
 
 }
 
-func NextMaxTimestamp() uint64 {
-	return maxtimestamp.Add(^uint64(0))
-}
+// func NextMaxTimestamp() uint64 {
+// 	return maxtimestamp.Add(^uint64(0))
+// }
 
 type Set interface {
 	IsDisjoint(Set) bool
@@ -48,11 +49,17 @@ type Transaction interface {
 	GetWriteSet() Set
 	GetReadSet() Set
 
-	Read() error  // aka. fetch
-	Write() error // aka. commit
+	Read() error        // aka. fetch
+	Write(string) error // write one target
 	Execute() error
 
 	GetOutcomes() ([]any, error)
+
+	Backup(string) error
+	Revert(string) error
+	DiscardBackup(string) error
+
+	GetID() string
 }
 
 type TransactionContainer interface {
@@ -108,7 +115,7 @@ func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error 
 	}
 
 	// write phase -- finalize changes to production zone
-	err = txn.Write()
+	err = Commit(txn)
 	if err != nil {
 		prevTxns.Remove(txn)
 		return err
