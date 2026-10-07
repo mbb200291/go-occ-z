@@ -9,7 +9,8 @@ import (
 )
 
 var timestamp atomic.Uint64
-var maxtimestamp atomic.Uint64
+
+// var maxtimestamp atomic.Uint64
 var muR sync.RWMutex
 var muV sync.RWMutex
 
@@ -18,15 +19,15 @@ func NextTimestamp() uint64 {
 }
 
 func init() {
-	maxtimestamp.Store(math.MaxUint64)
+	// maxtimestamp.Store(math.MaxUint64)
 	muR = sync.RWMutex{}
 	muV = sync.RWMutex{}
 
 }
 
-func NextMaxTimestamp() uint64 {
-	return maxtimestamp.Add(^uint64(0))
-}
+// func NextMaxTimestamp() uint64 {
+// 	return maxtimestamp.Add(^uint64(0))
+// }
 
 type Set interface {
 	IsDisjoint(Set) bool
