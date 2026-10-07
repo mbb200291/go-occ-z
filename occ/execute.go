@@ -48,8 +48,8 @@ type Transaction interface {
 	GetWriteSet() Set
 	GetReadSet() Set
 
-	Read() error  // aka. load
-	Write() error // aka. finalize
+	Read() error  // aka. fetch
+	Write() error // aka. commit
 	Execute() error
 
 	GetOutcomes() ([]any, error)
@@ -66,15 +66,15 @@ type TransactionContainer interface {
 // prevTxn should use validate time as key
 // ongoingTxn should use read time as key
 func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error {
-	muR.Lock()
 	// read phase -- load read set to private zone
+	muR.Lock() // [+] lock
 	txn.SetReadTime(NextTimestamp())
 
 	// register txn to ongoing T and all T
 	ongoingTxns.Add(txn) // ordered by readtime
-	muR.Unlock()
+	muR.Unlock()         // [-] unlock
 
-	// unregister from ongoing T
+	// unregister txn from ongoing T after txn complete
 	defer ongoingTxns.Remove(txn)
 
 	err := txn.Read()
@@ -89,13 +89,12 @@ func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error 
 	}
 
 	// set validate
-	muV.Lock()
+	muV.Lock() // [+] lock
 	txn.SetValidateTime(NextTimestamp())
 
 	// add txn to prevTxn
 	prevTxns.Add(txn)
-	defer prevTxns.Remove(txn)
-	muV.Unlock()
+	muV.Unlock() // [-] unlock
 
 	// prepare purge write time till to
 	minTxnReadTime := uint64(math.MaxInt64)
