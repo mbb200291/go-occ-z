@@ -1,6 +1,7 @@
 package transaction
 
 import (
+	"crypto/rand"
 	"math"
 	"sync/atomic"
 
@@ -11,6 +12,10 @@ type Context interface {
 	Load(string) error
 	Write(string) error
 	GetOutcomes() ([]any, error)
+
+	Backup(string) error
+	Revert(string) error
+	DiscardBackup(string) error
 }
 
 type Command interface {
@@ -21,6 +26,7 @@ type Command interface {
 }
 
 type Transaction struct {
+	id   string
 	cmds []Command
 
 	readTime     atomic.Uint64
@@ -35,8 +41,11 @@ type Transaction struct {
 
 func NewTransaction(cmds []Command, ctx Context) *Transaction {
 	txn := &Transaction{
-		cmds: cmds,
-		ctx:  ctx,
+		id:       rand.Text(),
+		cmds:     append([]Command(nil), cmds...),
+		ctx:      ctx,
+		readSet:  NewSet(),
+		writeSet: NewSet(),
 	}
 	txn.readTime.Store(math.MaxUint64)
 	txn.validateTime.Store(math.MaxUint64)
@@ -53,6 +62,20 @@ func NewTransaction(cmds []Command, ctx Context) *Transaction {
 		}
 	}
 	return txn
+}
+
+func (txn *Transaction) GetID() string { return txn.id }
+
+func (txn *Transaction) Backup(target string) error {
+	return txn.ctx.Backup(target)
+}
+
+func (txn *Transaction) Revert(target string) error {
+	return txn.ctx.Revert(target)
+}
+
+func (txn *Transaction) DiscardBackup(target string) error {
+	return txn.ctx.DiscardBackup(target)
 }
 
 func (txn *Transaction) GetReadTime() uint64 {
@@ -98,14 +121,8 @@ func (txn *Transaction) Read() error {
 	return nil
 }
 
-func (txn *Transaction) Write() error {
-	// TODO: need be able rollback logic when fail in middle
-	for t := range txn.GetWriteSet().All() {
-		if err := txn.ctx.Write(t); err != nil {
-			return err
-		}
-	}
-	return nil
+func (txn *Transaction) Write(target string) error {
+	return txn.ctx.Write(target)
 }
 
 func (txn *Transaction) Execute() error { // to be overwrite

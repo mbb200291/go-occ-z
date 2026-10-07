@@ -49,11 +49,17 @@ type Transaction interface {
 	GetWriteSet() Set
 	GetReadSet() Set
 
-	Read() error  // aka. fetch
-	Write() error // aka. commit
+	Read() error        // aka. fetch
+	Write(string) error // write one target
 	Execute() error
 
 	GetOutcomes() ([]any, error)
+
+	Backup(string) error
+	Revert(string) error
+	DiscardBackup(string) error
+
+	GetID() string
 }
 
 type TransactionContainer interface {
@@ -109,7 +115,7 @@ func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error 
 	}
 
 	// write phase -- finalize changes to production zone
-	err = txn.Write()
+	err = Commit(txn)
 	if err != nil {
 		prevTxns.Remove(txn)
 		return err
