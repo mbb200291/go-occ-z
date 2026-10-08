@@ -12,7 +12,8 @@ import (
 func Commit(txn Transaction) error {
 	for target := range txn.GetWriteSet().All() {
 		// backup target
-		if err := txn.Backup(target); err != nil {
+		ori, _ := txn.Serialize(txn.ReadTarget(target))
+		if err := saveBackup(txn.GetID(), target, ori); err != nil {
 			_ = Withdraw(txn)
 			return err
 		}
@@ -24,15 +25,18 @@ func Commit(txn Transaction) error {
 		}
 
 		// write target
-		if err := txn.Write(target); err != nil {
+		if err := txn.Write(target, txn.GetOutcome(target)); err != nil {
 			_ = Withdraw(txn)
 			return err
 		}
 	}
 
+	// write COMMIT log
+	appendLog(txn.GetID(), "COMMIT", "")
+
 	// if success write, discard all backups
 	for target := range txn.GetWriteSet().All() {
-		if err := txn.DiscardBackup(target); err != nil {
+		if err := discardBackup(txn.GetID(), target); err != nil {
 			log.Printf("failed to discard backup for target %q: %v", target, err)
 		}
 	}
@@ -48,14 +52,30 @@ func Commit(txn Transaction) error {
 func Withdraw(txn Transaction) error {
 
 	// load log files, determine target to revert
-	toRevert, err := loadTargetsToRevert(txn.GetID())
+	toRevert, committed, err := loadTargetsToRevert(id)
 	if err != nil {
 		return err
 	}
 
 	for target := range toRevert {
 		// revert target
-		if err := txn.Revert(target); err != nil {
+		orib, err := loadBackup(txn.GetID(), target)
+		if err != nil {
+			panic(fmt.Sprintf(
+				"atomicity broken, failed to load backup of target %q: %v",
+				target,
+				err,
+			))
+		}
+		ori, err := txn.UnSerialize(orib)
+		if err != nil {
+			panic(fmt.Sprintf(
+				"atomicity broken, failed to unSerialize backup of target %q: %v",
+				target,
+				err,
+			))
+		}
+		if err := txn.Write(target, ori); err != nil {
 			panic(fmt.Sprintf(
 				"atomicity broken, failed to revert target %q: %v",
 				target,
@@ -69,7 +89,7 @@ func Withdraw(txn Transaction) error {
 		}
 
 		// discard backup when revert completed
-		if err := txn.DiscardBackup(target); err != nil {
+		if err := discardBackup(txn.GetID(), target); err != nil {
 			return err
 		}
 	}
@@ -82,43 +102,80 @@ func Withdraw(txn Transaction) error {
 	return nil
 }
 
-func loadTargetsToRevert(id string) (map[string]bool, error) {
+func discardBackup(txnId, target string) error {
+	if err := os.Remove(filepath.Join(".backup", txnId, target)); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+func saveBackup(txnId, target string, saveBackup []byte) error {
+	path := filepath.Join(".backup", txnId, target)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, saveBackup, 0644)
+}
+
+func loadBackup(txnId, target string) ([]byte, error) {
+	path := filepath.Join(".backup", txnId, target)
+	return os.ReadFile(path)
+}
+
+func loadTargetsToRevert(id string) (map[string]bool, bool, error) {
 	path := filepath.Join(".commit", id)
+	toRevert := make(map[string]bool)
 
 	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return map[string]bool{}, nil
+			return toRevert, false, nil
 		}
-		return nil, err
+		return nil, false, err
 	}
 	defer file.Close()
 
-	toRevert := make(map[string]bool)
-
+	committed := false
 	scanner := bufio.NewScanner(file)
+
 	for scanner.Scan() {
-		fields := strings.Fields(scanner.Text())
-		if len(fields) != 2 {
+		line := scanner.Text()
+
+		if committed {
+			return nil, false, fmt.Errorf(
+				"unexpected log after COMMIT: %q", line,
+			)
+		}
+
+		if strings.TrimSpace(line) == "COMMIT" {
+			committed = true
 			continue
 		}
 
-		action := fields[0]
-		target := fields[1]
+		action, target, ok := strings.Cut(line, " ")
+		if !ok || target == "" {
+			return nil, false, fmt.Errorf(
+				"invalid log entry: %q", line,
+			)
+		}
 
 		switch action {
 		case "WRITE":
 			toRevert[target] = true
 		case "REVERT":
 			delete(toRevert, target)
+		default:
+			return nil, false, fmt.Errorf(
+				"unknown log action: %q", action,
+			)
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	return toRevert, nil
+	return toRevert, committed, nil
 }
 
 func appendLog(id, action, target string) error {
@@ -156,4 +213,8 @@ func removeLog(id string) error {
 	}
 
 	return nil
+}
+
+func OccTidyUp() func() any {
+	// to read unfinished txn in txn logs and carry on undone txn rollback works
 }
