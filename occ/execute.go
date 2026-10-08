@@ -49,16 +49,16 @@ type Transaction interface {
 	GetWriteSet() Set
 	GetReadSet() Set
 
-	Read() error        // aka. fetch
-	Write(string) error // write one target
+	Read() error // aka. fetch
+	ReadTarget(string) error
+	Write(string, any) error // write one target
 	Execute() error
 
 	GetOutcomes() ([]any, error)
+	GetOutcome(string) any
 
-	Backup(string) error
-	Revert(string) error
-	DiscardBackup(string) error
-
+	Serialize(any) ([]byte, error)
+	UnSerialize([]byte) (any, error)
 	GetID() string
 }
 

@@ -14,19 +14,19 @@ func Commit(txn Transaction) error {
 		// backup target
 		ori, _ := txn.Serialize(txn.ReadTarget(target))
 		if err := saveBackup(txn.GetID(), target, ori); err != nil {
-			_ = Withdraw(txn)
+			Withdraw(txn)
 			return err
 		}
 
 		// write log first, even target not been write -> idempotent recover by backup
 		if err := appendLog(txn.GetID(), "WRITE", target); err != nil {
-			_ = Withdraw(txn)
+			Withdraw(txn)
 			return err
 		}
 
 		// write target
 		if err := txn.Write(target, txn.GetOutcome(target)); err != nil {
-			_ = Withdraw(txn)
+			Withdraw(txn)
 			return err
 		}
 	}
@@ -35,14 +35,12 @@ func Commit(txn Transaction) error {
 	appendLog(txn.GetID(), "COMMIT", "")
 
 	// if success write, discard all backups
-	for target := range txn.GetWriteSet().All() {
-		if err := discardBackup(txn.GetID(), target); err != nil {
-			log.Printf("failed to discard backup for target %q: %v", target, err)
-		}
+	if err := cleanupBackups(txn.GetID()); err != nil {
+		log.Printf("failed to remove txn backups %s: %v", txn.GetID(), err)
 	}
 
 	// remove txn log
-	if err := removeLog(txn.GetID()); err != nil {
+	if err := cleanupLogs(txn.GetID()); err != nil {
 		log.Printf("failed to remove txn log %s: %v", txn.GetID(), err)
 	}
 
@@ -50,6 +48,7 @@ func Commit(txn Transaction) error {
 }
 
 func Withdraw(txn Transaction) error {
+	id := txn.GetID()
 
 	// load log files, determine target to revert
 	toRevert, committed, err := loadTargetsToRevert(id)
@@ -57,46 +56,57 @@ func Withdraw(txn Transaction) error {
 		return err
 	}
 
+	if committed {
+		return fmt.Errorf(
+			"cannot withdraw committed txn %s", id,
+		)
+	}
+
 	for target := range toRevert {
-		// revert target
-		orib, err := loadBackup(txn.GetID(), target)
+		// Load backup
+		orib, err := loadBackup(id, target)
 		if err != nil {
-			panic(fmt.Sprintf(
-				"atomicity broken, failed to load backup of target %q: %v",
-				target,
-				err,
-			))
+			return fmt.Errorf(
+				"failed to load backup for %q: %w",
+				target, err,
+			)
 		}
+
 		ori, err := txn.UnSerialize(orib)
 		if err != nil {
-			panic(fmt.Sprintf(
-				"atomicity broken, failed to unSerialize backup of target %q: %v",
-				target,
-				err,
-			))
+			return fmt.Errorf(
+				"failed to unserialize backup for %q: %w",
+				target, err,
+			)
 		}
+
+		// revert target
 		if err := txn.Write(target, ori); err != nil {
-			panic(fmt.Sprintf(
-				"atomicity broken, failed to revert target %q: %v",
-				target,
-				err,
-			))
+			return fmt.Errorf(
+				"failed to revert target %q: %w",
+				target, err,
+			)
 		}
 
 		// add revert log after revert had been doen
-		if err := appendLog(txn.GetID(), "REVERT", target); err != nil {
+		if err := appendLog(id, "REVERT", target); err != nil {
 			return err
 		}
 
 		// discard backup when revert completed
-		if err := discardBackup(txn.GetID(), target); err != nil {
+		if err := discardBackup(id, target); err != nil {
 			return err
 		}
 	}
 
+	// remove txn backups
+	if err := cleanupBackups(id); err != nil {
+		log.Printf("failed to remove txn backups %s: %v", id, err)
+	}
+
 	// remove txn log
-	if err := removeLog(txn.GetID()); err != nil {
-		log.Printf("failed to remove txn log %s: %v", txn.GetID(), err)
+	if err := cleanupLogs(id); err != nil {
+		log.Printf("failed to remove txn log %s: %v", id, err)
 	}
 
 	return nil
@@ -202,7 +212,7 @@ func appendLog(id, action, target string) error {
 	return file.Sync()
 }
 
-func removeLog(id string) error {
+func cleanupLogs(id string) error {
 	path := filepath.Join(".commit", id)
 
 	if err := os.Remove(path); err != nil {
@@ -215,6 +225,15 @@ func removeLog(id string) error {
 	return nil
 }
 
-func OccTidyUp() func() any {
+func cleanupBackups(id string) error {
+	// remove backups first
+	if err := os.RemoveAll(filepath.Join(".backup", id)); err != nil {
+		return err
+	}
+	return nil
+}
+
+func OccTidyUp() error {
 	// to read unfinished txn in txn logs and carry on undone txn rollback works
+	return nil
 }
