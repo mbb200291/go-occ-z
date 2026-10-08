@@ -63,7 +63,7 @@ jobs:
             git switch -C pohw-badges-generated FETCH_HEAD
           else
             git switch --orphan pohw-badges-generated
-            git rm -rf . >/dev/null
+            git rm -rf --ignore-unmatch . >/dev/null
           fi
           cp "$VERIFIED_FILE" summary.json
           git add summary.json
