@@ -37,6 +37,11 @@ func Commit(txn Transaction) error {
 		}
 	}
 
+	// remove txn log
+	if err := removeLog(txn.GetID()); err != nil {
+		log.Printf("failed to remove txn log %s: %v", txn.GetID(), err)
+	}
+
 	return nil
 }
 
@@ -67,6 +72,11 @@ func Withdraw(txn Transaction) error {
 		if err := txn.DiscardBackup(target); err != nil {
 			return err
 		}
+	}
+
+	// remove txn log
+	if err := removeLog(txn.GetID()); err != nil {
+		log.Printf("failed to remove txn log %s: %v", txn.GetID(), err)
 	}
 
 	return nil
@@ -133,4 +143,17 @@ func appendLog(id, action, target string) error {
 	}
 
 	return file.Sync()
+}
+
+func removeLog(id string) error {
+	path := filepath.Join(".commit", id)
+
+	if err := os.Remove(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	return nil
 }
