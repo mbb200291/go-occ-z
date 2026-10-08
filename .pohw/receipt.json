@@ -2,25 +2,25 @@
   "body": {
     "schema": "pohw-editing-receipt/v1",
     "claim": "self-attested-editor-behavior",
-    "issuedAt": "2026-10-08T14:15:56.593Z",
+    "issuedAt": "2026-10-08T14:59:43.211Z",
     "keyId": "5e8b6a3e3cfa8d0927b8e7a7966488cfef12f6e5c4fe9affeb99f7120c19e46f",
     "code": {
-      "rootHash": "08dec9ce36ab909acc0f9d48b8ea5cbaa0430af2bd655c969917c78a56a71238",
+      "rootHash": "145e6b6a8d4ee61b3a97aa28d44a4aeb373c3624b9132b6642f81a340f05f1dd",
       "files": 13,
       "algorithm": "pohw-code-files-sha256-v1"
     },
     "metrics": {
-      "scorePercent": 82,
-      "coveragePercent": 0.36,
-      "units": 20176,
-      "monitoredUnits": 73,
+      "scorePercent": 52.08,
+      "coveragePercent": 1.53,
+      "units": 21735,
+      "monitoredUnits": 332,
       "algorithm": "rule-based-v0.1"
     },
     "session": {
-      "startedAt": "2026-10-08T14:05:30.784Z",
-      "endedAt": "2026-10-08T14:15:56.362Z",
-      "auditTip": "b0fc991c6a22f67413a14edcb685a93c0ef0620ed3c418c1d57e9dd74b22830b"
+      "startedAt": "2026-10-08T14:19:55.820Z",
+      "endedAt": "2026-10-08T14:59:42.942Z",
+      "auditTip": "cb167db54db98efcbe295af8253c9b10f7974797d6df319c09060b97d905acd2"
     }
   },
-  "signature": "xry3cV2u3XwLNYc6nrxheKC5ISniQ0s79Ol1pYOaFegLFrZbP8Ppql27sxXKA+b67arJHob4aANBqQabasTQCQ=="
+  "signature": "WSdQkNI3aV3Yt+kResomlzT9pPvSGVgDo0d4LpK3SyMEfnFhCzI71zc/oQRHcHql+J6svk47UdaRNeLDaFJ3Aw=="
 }
