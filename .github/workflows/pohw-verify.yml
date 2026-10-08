@@ -1,7 +1,10 @@
-# PoHW research prototype: verifies self-attested receipt signatures and source-file hashes.
-# Passing this workflow does NOT establish human cognitive authorship.
+# Verifies a self-attested signed receipt for the exact source commit.
+# The evidence Git branch is separate from user code/staging.
 name: PoHW Receipt Verification
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches: ["dev"]
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -9,24 +12,36 @@ concurrency:
   cancel-in-progress: true
 jobs:
   verify:
-    name: Verify signed receipt and code state
+    name: Verify evidence for source commit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Check pinned PoHW verifier code
         shell: bash
         run: |
-          echo "688325a77da045b27e2c329404d58f598a143f12b5a721eb4e942dbedafa7f56  .pohw/proof.js" | sha256sum --check --status
-          echo "dab23b80585c1371e38b9fc301d49adbbb40dd292703cbd2863d795e6ee802b3  .pohw/verify.cjs" | sha256sum --check --status
-      - name: Verify receipt signature and source file content
-        run: node .pohw/verify.cjs . "$RUNNER_TEMP/pohw-summary.json"
+          echo "bbfbd5f0e599a91e82b8c7d486b2b34fc231c776018e6fa04a7cbf482d51ed22  .pohw/proof.js" | sha256sum --check --status
+          echo "013457cc163d02b6eaf8c55412f0c2131b62a112f50bfa7b2075e99200028f44  .pohw/verify.cjs" | sha256sum --check --status
+      - name: Wait for separately pushed signed evidence
+        shell: bash
+        run: |
+          for attempt in $(seq 1 30); do
+            if git fetch --no-tags origin refs/heads/pohw-evidence >/dev/null 2>&1 && \
+               git show "FETCH_HEAD:receipts/${GITHUB_SHA}.json" > "$RUNNER_TEMP/pohw-receipt.json" 2>/dev/null; then
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "PoHW evidence is missing for $GITHUB_SHA" >&2
+          exit 1
+      - name: Verify signature, commit binding and source tree
+        run: node .pohw/verify.cjs . "$RUNNER_TEMP/pohw-receipt.json" "$RUNNER_TEMP/pohw-summary.json"
       - uses: actions/upload-artifact@v4
         with:
           name: pohw-verified-summary
           path: ${{ runner.temp }}/pohw-summary.json
           if-no-files-found: error
   publish:
-    name: Publish CI-verified badges
+    name: Publish verified badges
     if: github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
     needs: verify
     runs-on: ubuntu-latest
@@ -38,7 +53,7 @@ jobs:
         with:
           name: pohw-verified-summary
           path: ${{ runner.temp }}/pohw-verified
-      - name: Publish verified badge data (separate branch)
+      - name: Publish verified summary to independent badge branch
         env:
           VERIFIED_FILE: ${{ runner.temp }}/pohw-verified/pohw-summary.json
         run: |
@@ -52,5 +67,5 @@ jobs:
           fi
           cp "$VERIFIED_FILE" summary.json
           git add summary.json
-          git commit -m "chore: publish PoHW verified badge data for $GITHUB_SHA"
+          git commit -m "chore: publish verified PoHW summary for $GITHUB_SHA"
           git push origin HEAD:refs/heads/pohw-badges
