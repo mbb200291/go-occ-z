@@ -1,0 +1,27 @@
+{
+  "body": {
+    "schema": "pohw-editing-receipt/v2",
+    "claim": "self-attested-editor-behavior",
+    "targetCommit": "e0ff6860cf934c9fdfeb9eb3c5dde245cff361e4",
+    "issuedAt": "2026-10-09T14:49:11.116Z",
+    "keyId": "5e8b6a3e3cfa8d0927b8e7a7966488cfef12f6e5c4fe9affeb99f7120c19e46f",
+    "code": {
+      "rootHash": "fc1a3260668b98aaaa79d498c5de367ae4f267095add85dc6a6bd0fdc0cc52b3",
+      "files": 13,
+      "algorithm": "pohw-code-files-sha256-v1"
+    },
+    "metrics": {
+      "scorePercent": 43.33,
+      "coveragePercent": 6.92,
+      "units": 22202,
+      "monitoredUnits": 1537,
+      "algorithm": "rule-based-v0.1"
+    },
+    "session": {
+      "startedAt": "2026-10-08T15:07:31.332Z",
+      "endedAt": null,
+      "auditTip": "6afb637475c1e97487f9c9b57f7cbcf6563609abca11c577740da86f0d86a87c"
+    }
+  },
+  "signature": "W3CXsu2vdIyxNxeHH/fYGGmVQwSMEor4j5USKHbUiby+LyamXylAkpTOqmHfdf6ZiQutMpUXGN/GmEbZKSfIBg=="
+}
