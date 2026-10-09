@@ -2,6 +2,7 @@ package occ
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -12,31 +13,46 @@ import (
 func Commit(txn Transaction) error {
 	for target := range txn.GetWriteSet().All() {
 		// backup target
-		ori, _ := txn.Serialize(txn.ReadTarget(target))
+		ori, err := txn.Serialize(txn.ReadTarget(target))
+		if err != nil {
+			if rollbackErr := Withdraw(txn); rollbackErr != nil {
+				return errors.Join(err, rollbackErr)
+			}
+			return err
+		}
 		if err := saveBackup(txn.GetID(), target, ori); err != nil {
-			Withdraw(txn)
+			if rollbackErr := Withdraw(txn); rollbackErr != nil {
+				return errors.Join(err, rollbackErr)
+			}
 			return err
 		}
 
 		// write log first, even target not been write -> idempotent recover by backup
 		if err := appendLog(txn.GetID(), "WRITE", target); err != nil {
-			Withdraw(txn)
+			if rollbackErr := Withdraw(txn); rollbackErr != nil {
+				return errors.Join(err, rollbackErr)
+			}
 			return err
 		}
 
 		// write target
 		if err := txn.Write(target, txn.GetOutcome(target)); err != nil {
-			Withdraw(txn)
+			if rollbackErr := Withdraw(txn); rollbackErr != nil {
+				return errors.Join(err, rollbackErr)
+			}
 			return err
 		}
 	}
 
 	// write COMMIT log
-	appendLog(txn.GetID(), "COMMIT", "")
+	if err := appendLog(txn.GetID(), "COMMIT", ""); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
 
 	// if success write, discard all backups
 	if err := cleanupBackups(txn.GetID()); err != nil {
 		log.Printf("failed to remove txn backups %s: %v", txn.GetID(), err)
+		return nil // keep log file in order to be able to redo cleanup backups
 	}
 
 	// remove txn log
@@ -47,7 +63,9 @@ func Commit(txn Transaction) error {
 	return nil
 }
 
+// revert target to backup when txn not yet complete write target and remove intermediate products
 func Withdraw(txn Transaction) error {
+
 	id := txn.GetID()
 
 	// load log files, determine target to revert
@@ -57,51 +75,52 @@ func Withdraw(txn Transaction) error {
 	}
 
 	if committed {
-		return fmt.Errorf(
-			"cannot withdraw committed txn %s", id,
+		log.Printf(
+			"txn %s commited, but maybe fail to remove log", id,
 		)
-	}
+	} else {
+		for target := range toRevert {
+			// Load backup
+			orib, err := loadBackup(id, target)
+			if err != nil {
+				return fmt.Errorf(
+					"failed to load backup for %q: %w",
+					target, err,
+				)
+			}
 
-	for target := range toRevert {
-		// Load backup
-		orib, err := loadBackup(id, target)
-		if err != nil {
-			return fmt.Errorf(
-				"failed to load backup for %q: %w",
-				target, err,
-			)
-		}
+			ori, err := txn.UnSerialize(orib)
+			if err != nil {
+				return fmt.Errorf(
+					"failed to unserialize backup for %q: %w",
+					target, err,
+				)
+			}
 
-		ori, err := txn.UnSerialize(orib)
-		if err != nil {
-			return fmt.Errorf(
-				"failed to unserialize backup for %q: %w",
-				target, err,
-			)
-		}
+			// revert target
+			if err := txn.Write(target, ori); err != nil {
+				return fmt.Errorf(
+					"failed to revert target %q: %w",
+					target, err,
+				)
+			}
 
-		// revert target
-		if err := txn.Write(target, ori); err != nil {
-			return fmt.Errorf(
-				"failed to revert target %q: %w",
-				target, err,
-			)
-		}
+			// add revert log after revert had been doen
+			if err := appendLog(id, "REVERT", target); err != nil {
+				return err
+			}
 
-		// add revert log after revert had been doen
-		if err := appendLog(id, "REVERT", target); err != nil {
-			return err
-		}
-
-		// discard backup when revert completed
-		if err := discardBackup(id, target); err != nil {
-			return err
+			// discard backup when revert completed
+			if err := discardBackup(id, target); err != nil {
+				return err
+			}
 		}
 	}
 
 	// remove txn backups
 	if err := cleanupBackups(id); err != nil {
 		log.Printf("failed to remove txn backups %s: %v", id, err)
+		return nil // skip remove log in order to be able carry on remove backup and log steps
 	}
 
 	// remove txn log
@@ -119,12 +138,33 @@ func discardBackup(txnId, target string) error {
 	return nil
 }
 
-func saveBackup(txnId, target string, saveBackup []byte) error {
+func saveBackup(txnId, target string, data []byte) error {
 	path := filepath.Join(".backup", txnId, target)
+
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
-	return os.WriteFile(path, saveBackup, 0644)
+
+	file, err := os.OpenFile(
+		path,
+		os.O_CREATE|os.O_EXCL|os.O_WRONLY,
+		0644,
+	)
+	if err != nil {
+		return err
+	}
+
+	if _, err := file.Write(data); err != nil {
+		_ = file.Close()
+		return err
+	}
+
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return err
+	}
+
+	return file.Close()
 }
 
 func loadBackup(txnId, target string) ([]byte, error) {
@@ -214,19 +254,13 @@ func appendLog(id, action, target string) error {
 
 func cleanupLogs(id string) error {
 	path := filepath.Join(".commit", id)
-
-	if err := os.Remove(path); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
+	if err := os.RemoveAll(path); err != nil { // won't return error when file already removed (not exist)
 		return err
 	}
-
 	return nil
 }
 
 func cleanupBackups(id string) error {
-	// remove backups first
 	if err := os.RemoveAll(filepath.Join(".backup", id)); err != nil {
 		return err
 	}
@@ -235,5 +269,6 @@ func cleanupBackups(id string) error {
 
 func OccTidyUp() error {
 	// to read unfinished txn in txn logs and carry on undone txn rollback works
+	// will only revert change (woun't carry out commit)
 	return nil
 }
