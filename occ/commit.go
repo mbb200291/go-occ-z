@@ -13,14 +13,21 @@ import (
 func Commit(txn Transaction) error {
 	for target := range txn.GetWriteSet().All() {
 		// backup target
-		ori, err := txn.Serialize(txn.ReadTarget(target))
+		ori, err := txn.ReadTarget(target)
 		if err != nil {
 			if rollbackErr := Withdraw(txn); rollbackErr != nil {
 				return errors.Join(err, rollbackErr)
 			}
 			return err
 		}
-		if err := saveBackup(txn.GetID(), target, ori); err != nil {
+		oriB, err := txn.Serialize(ori)
+		if err != nil {
+			if rollbackErr := Withdraw(txn); rollbackErr != nil {
+				return errors.Join(err, rollbackErr)
+			}
+			return err
+		}
+		if err := saveBackup(txn.GetID(), target, oriB); err != nil {
 			if rollbackErr := Withdraw(txn); rollbackErr != nil {
 				return errors.Join(err, rollbackErr)
 			}
@@ -267,8 +274,36 @@ func cleanupBackups(id string) error {
 	return nil
 }
 
-func OccTidyUp() error {
-	// to read unfinished txn in txn logs and carry on undone txn rollback works
-	// will only revert change (woun't carry out commit)
-	return nil
+// to read unfinished txn in txn logs and carry on undone txn rollback works
+// will only revert change (woun't carry out commit)
+func TidyUp(id2Txn func(string) (Transaction, error)) error {
+	entries, err := os.ReadDir(".commit")
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	var errs []error
+
+	for _, entry := range entries {
+		if !entry.Type().IsRegular() {
+			continue
+		}
+
+		id := entry.Name()
+		var txn Transaction
+		txn, err = id2Txn(id)
+		if err == nil {
+			err = Withdraw(txn)
+		}
+		if err != nil {
+			errs = append(errs, fmt.Errorf(
+				"failed to recover txn %s: %w", id, err,
+			))
+		}
+	}
+
+	return errors.Join(errs...)
 }

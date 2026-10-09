@@ -10,12 +10,13 @@ import (
 
 type Context interface {
 	Load(string) error
-	Write(string) error
+	ReadTarget(string) (any, error) // reads shared data for backup without changing the private workspace.
+	Write(string, any) error
 	GetOutcomes() ([]any, error)
-
-	Backup(string) error
+	GetOutcome(string) any
+	Serialize(any) ([]byte, error)
+	UnSerialize([]byte) (any, error)
 	Revert(string) error
-	DiscardBackup(string) error
 }
 
 type Command interface {
@@ -66,16 +67,8 @@ func NewTransaction(cmds []Command, ctx Context) *Transaction {
 
 func (txn *Transaction) GetID() string { return txn.id }
 
-func (txn *Transaction) Backup(target string) error {
-	return txn.ctx.Backup(target)
-}
-
 func (txn *Transaction) Revert(target string) error {
 	return txn.ctx.Revert(target)
-}
-
-func (txn *Transaction) DiscardBackup(target string) error {
-	return txn.ctx.DiscardBackup(target)
 }
 
 func (txn *Transaction) GetReadTime() uint64 {
@@ -121,8 +114,12 @@ func (txn *Transaction) Read() error {
 	return nil
 }
 
-func (txn *Transaction) Write(target string) error {
-	return txn.ctx.Write(target)
+func (txn *Transaction) ReadTarget(target string) (any, error) {
+	return txn.ctx.ReadTarget(target)
+}
+
+func (txn *Transaction) Write(target string, value any) error {
+	return txn.ctx.Write(target, value)
 }
 
 func (txn *Transaction) Execute() error { // to be overwrite
@@ -136,4 +133,16 @@ func (txn *Transaction) Execute() error { // to be overwrite
 
 func (txn *Transaction) GetOutcomes() ([]any, error) {
 	return txn.ctx.GetOutcomes()
+}
+
+func (txn *Transaction) GetOutcome(target string) any {
+	return txn.ctx.GetOutcome(target)
+}
+
+func (txn *Transaction) Serialize(value any) ([]byte, error) {
+	return txn.ctx.Serialize(value)
+}
+
+func (txn *Transaction) UnSerialize(data []byte) (any, error) {
+	return txn.ctx.UnSerialize(data)
 }

@@ -50,7 +50,7 @@ type Transaction interface {
 	GetReadSet() Set
 
 	Read() error // aka. fetch
-	ReadTarget(string) error
+	ReadTarget(string) (any, error)
 	Write(string, any) error // write one target
 	Execute() error
 
