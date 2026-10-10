@@ -57,6 +57,8 @@ func Commit(txn Transaction) error {
 		if rollbackErr := Withdraw(txn); rollbackErr != nil {
 			return errors.Join(err, rollbackErr)
 		}
+		return err
+
 	}
 
 	// if success write, discard all backups
