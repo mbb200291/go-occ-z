@@ -11,7 +11,7 @@ func (cmdb *CommandBase) IsReadOnly() bool {
 }
 
 func (cmdb *CommandBase) IsWriteOnly() bool {
-	return cmdb.readOnly
+	return cmdb.writeOnly
 }
 
 func (cmdb *CommandBase) GetTargets() []string {
