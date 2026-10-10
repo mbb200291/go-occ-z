@@ -111,17 +111,23 @@ func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error 
 
 	// run validate
 	if outcome := Validate(txn, prevTxns, minTxnReadTime); !outcome {
+		prevTxns.Remove(txn)
 		return errors.New("read-write lock")
 	}
 
 	// write phase -- finalize changes to production zone
 	err = Commit(txn)
-	if err != nil {
-		prevTxns.Remove(txn)
-		return err
-	}
 
+	// mark write time after write phase -- no matter commit success or not, mark the dirty write time range
 	txn.SetWriteTime(NextTimestamp())
+
+	// raise err of commit phase
+	if err != nil {
+		return errors.Join(
+			errors.New("commit fail"),
+			err,
+		)
+	}
 
 	return nil
 }
