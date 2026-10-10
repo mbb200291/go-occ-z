@@ -54,7 +54,9 @@ func Commit(txn Transaction) error {
 
 	// write COMMIT log
 	if err := appendLog(txn.GetID(), "COMMIT", ""); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
+		if rollbackErr := Withdraw(txn); rollbackErr != nil {
+			return errors.Join(err, rollbackErr)
+		}
 	}
 
 	// if success write, discard all backups
