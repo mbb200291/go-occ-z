@@ -2,6 +2,7 @@ package occ
 
 import (
 	"bufio"
+	"encoding/base32"
 	"errors"
 	"fmt"
 	"log"
@@ -139,14 +140,29 @@ func Withdraw(txn Transaction) error {
 }
 
 func discardBackup(txnId, target string) error {
-	if err := os.Remove(filepath.Join(".backup", txnId, target)); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(filepath.Join(".backup", encodeTarget(txnId), encodeTarget(target))); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	return nil
 }
 
+var pathEncoding = base32.StdEncoding.WithPadding(base32.NoPadding)
+
+func encodeTarget(target string) string {
+	return "x_" + pathEncoding.EncodeToString([]byte(target))
+}
+
+func decodeTarget(encoded string) (string, error) {
+	if !strings.HasPrefix(encoded, "x_") {
+		return "", fmt.Errorf("invalid encoded target: %q", encoded)
+	}
+
+	data, err := pathEncoding.DecodeString(encoded[2:])
+	return string(data), err
+}
+
 func saveBackup(txnId, target string, data []byte) error {
-	path := filepath.Join(".backup", txnId, target)
+	path := filepath.Join(".backup", encodeTarget(txnId), encodeTarget(target))
 
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
@@ -175,12 +191,12 @@ func saveBackup(txnId, target string, data []byte) error {
 }
 
 func loadBackup(txnId, target string) ([]byte, error) {
-	path := filepath.Join(".backup", txnId, target)
+	path := filepath.Join(".backup", encodeTarget(txnId), encodeTarget(target))
 	return os.ReadFile(path)
 }
 
 func loadTargetsToRevert(txnId string) (map[string]bool, bool, error) {
-	path := filepath.Join(".commit", txnId)
+	path := filepath.Join(".commit", encodeTarget(txnId))
 	toRevert := make(map[string]bool)
 
 	file, err := os.Open(path)
@@ -240,7 +256,7 @@ func appendLog(txnId, action, target string) error {
 		return err
 	}
 
-	path := filepath.Join(".commit", txnId)
+	path := filepath.Join(".commit", filepath.Join(txnId))
 
 	file, err := os.OpenFile(
 		path,
@@ -260,7 +276,7 @@ func appendLog(txnId, action, target string) error {
 }
 
 func cleanupLogs(txnId string) error {
-	path := filepath.Join(".commit", txnId)
+	path := filepath.Join(".commit", filepath.Join(txnId))
 	if err := os.RemoveAll(path); err != nil { // won't return error when file already removed (not exist)
 		return err
 	}
@@ -268,7 +284,7 @@ func cleanupLogs(txnId string) error {
 }
 
 func cleanupBackups(txnId string) error {
-	if err := os.RemoveAll(filepath.Join(".backup", txnId)); err != nil {
+	if err := os.RemoveAll(filepath.Join(".backup", filepath.Join(txnId))); err != nil {
 		return err
 	}
 	return nil
@@ -291,8 +307,12 @@ func TidyUp(createTxnById func(string) (Transaction, error)) error {
 		if !entry.Type().IsRegular() {
 			continue
 		}
+		txnId, err := decodeTarget(entry.Name())
+		if err != nil {
+			log.Printf("decode target txnId %s: %v", txnId, err)
+			continue
+		}
 
-		txnId := entry.Name()
 		var txn Transaction
 		txn, err = createTxnById(txnId)
 		if err == nil {
