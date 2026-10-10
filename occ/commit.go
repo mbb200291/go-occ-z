@@ -179,8 +179,8 @@ func loadBackup(txnId, target string) ([]byte, error) {
 	return os.ReadFile(path)
 }
 
-func loadTargetsToRevert(id string) (map[string]bool, bool, error) {
-	path := filepath.Join(".commit", id)
+func loadTargetsToRevert(txnId string) (map[string]bool, bool, error) {
+	path := filepath.Join(".commit", txnId)
 	toRevert := make(map[string]bool)
 
 	file, err := os.Open(path)
@@ -235,12 +235,12 @@ func loadTargetsToRevert(id string) (map[string]bool, bool, error) {
 	return toRevert, committed, nil
 }
 
-func appendLog(id, action, target string) error {
+func appendLog(txnId, action, target string) error {
 	if err := os.MkdirAll(".commit", 0755); err != nil {
 		return err
 	}
 
-	path := filepath.Join(".commit", id)
+	path := filepath.Join(".commit", txnId)
 
 	file, err := os.OpenFile(
 		path,
@@ -259,16 +259,16 @@ func appendLog(id, action, target string) error {
 	return file.Sync()
 }
 
-func cleanupLogs(id string) error {
-	path := filepath.Join(".commit", id)
+func cleanupLogs(txnId string) error {
+	path := filepath.Join(".commit", txnId)
 	if err := os.RemoveAll(path); err != nil { // won't return error when file already removed (not exist)
 		return err
 	}
 	return nil
 }
 
-func cleanupBackups(id string) error {
-	if err := os.RemoveAll(filepath.Join(".backup", id)); err != nil {
+func cleanupBackups(txnId string) error {
+	if err := os.RemoveAll(filepath.Join(".backup", txnId)); err != nil {
 		return err
 	}
 	return nil
@@ -276,7 +276,7 @@ func cleanupBackups(id string) error {
 
 // to read unfinished txn in txn logs and carry on undone txn rollback works
 // will only revert change (woun't carry out commit)
-func TidyUp(id2Txn func(string) (Transaction, error)) error {
+func TidyUp(createTxnById func(string) (Transaction, error)) error {
 	entries, err := os.ReadDir(".commit")
 	if os.IsNotExist(err) {
 		return nil
@@ -292,15 +292,15 @@ func TidyUp(id2Txn func(string) (Transaction, error)) error {
 			continue
 		}
 
-		id := entry.Name()
+		txnId := entry.Name()
 		var txn Transaction
-		txn, err = id2Txn(id)
+		txn, err = createTxnById(txnId)
 		if err == nil {
 			err = Withdraw(txn)
 		}
 		if err != nil {
 			errs = append(errs, fmt.Errorf(
-				"failed to recover txn %s: %w", id, err,
+				"failed to recover txn %s: %w", txnId, err,
 			))
 		}
 	}
