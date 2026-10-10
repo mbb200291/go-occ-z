@@ -260,7 +260,7 @@ func appendLog(txnId, action, target string) error {
 		return err
 	}
 
-	path := filepath.Join(".commit", filepath.Join(txnId))
+	path := filepath.Join(".commit", encodeTarget(txnId))
 
 	file, err := os.OpenFile(
 		path,
