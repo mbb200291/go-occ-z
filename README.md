@@ -1,7 +1,5 @@
 <!-- pohw-badges:start -->
-[![PoHW Editing Score](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmbb200291%2Fgo-occ-z%2Fpohw-badges%2Fsummary.json&query=%24.humanScore&suffix=%25&label=PoHW%20Editing%20Score&color=blue)](https://github.com/mbb200291/go-occ-z/actions/workflows/pohw-verify.yml)
-[![PoHW Monitored](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmbb200291%2Fgo-occ-z%2Fpohw-badges%2Fsummary.json&query=%24.monitoredCoverage&suffix=%25&label=PoHW%20Monitored&color=informational)](https://github.com/mbb200291/go-occ-z/actions/workflows/pohw-verify.yml)
-[![PoHW Receipt Verification](https://github.com/mbb200291/go-occ-z/actions/workflows/pohw-verify.yml/badge.svg?branch=dev)](https://github.com/mbb200291/go-occ-z/actions/workflows/pohw-verify.yml)
+[![PoHW Human Editing Score and Monitored Coverage](https://raw.githubusercontent.com/mbb200291/go-occ-z/pohw-badges/badge.svg)](https://github.com/mbb200291/go-occ-z/blob/pohw-badges/REPORT.md)
 <!-- pohw-badges:end -->
 
 # go-occ-z
