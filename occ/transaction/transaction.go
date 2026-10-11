@@ -146,3 +146,12 @@ func (txn *Transaction) Serialize(value any) ([]byte, error) {
 func (txn *Transaction) UnSerialize(data []byte) (any, error) {
 	return txn.ctx.UnSerialize(data)
 }
+
+func GetTransactionFactory(ctx Context) func(string) (occ.Transaction, error) {
+	return func(txnId string) (occ.Transaction, error) {
+		return &Transaction{
+			id:  txnId,
+			ctx: ctx,
+		}, nil
+	}
+}
