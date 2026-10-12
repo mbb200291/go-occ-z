@@ -17,20 +17,20 @@ func Commit(txn Transaction) error {
 		ori, err := txn.ReadTarget(target)
 		if err != nil {
 			if rollbackErr := Withdraw(txn); rollbackErr != nil {
-				return errors.Join(err, rollbackErr)
+				log.Panic(errors.Join(err, rollbackErr).Error())
 			}
 			return err
 		}
 		oriB, err := txn.Serialize(ori)
 		if err != nil {
 			if rollbackErr := Withdraw(txn); rollbackErr != nil {
-				return errors.Join(err, rollbackErr)
+				log.Panic(errors.Join(err, rollbackErr).Error())
 			}
 			return err
 		}
 		if err := saveBackup(txn.GetID(), target, oriB); err != nil {
 			if rollbackErr := Withdraw(txn); rollbackErr != nil {
-				return errors.Join(err, rollbackErr)
+				log.Panic(errors.Join(err, rollbackErr).Error())
 			}
 			return err
 		}
@@ -38,7 +38,7 @@ func Commit(txn Transaction) error {
 		// write log first, even target not been write -> idempotent recover by backup
 		if err := appendLog(txn.GetID(), "WRITE", target); err != nil {
 			if rollbackErr := Withdraw(txn); rollbackErr != nil {
-				return errors.Join(err, rollbackErr)
+				log.Panic(errors.Join(err, rollbackErr).Error())
 			}
 			return err
 		}
@@ -46,7 +46,7 @@ func Commit(txn Transaction) error {
 		// write target
 		if err := txn.Write(target, txn.GetOutcome(target)); err != nil {
 			if rollbackErr := Withdraw(txn); rollbackErr != nil {
-				return errors.Join(err, rollbackErr)
+				log.Panic(errors.Join(err, rollbackErr).Error())
 			}
 			return err
 		}
@@ -55,7 +55,7 @@ func Commit(txn Transaction) error {
 	// write COMMIT log
 	if err := appendLog(txn.GetID(), "COMMIT", ""); err != nil {
 		if rollbackErr := Withdraw(txn); rollbackErr != nil {
-			return errors.Join(err, rollbackErr)
+			log.Panic(errors.Join(err, rollbackErr).Error())
 		}
 		return err
 
