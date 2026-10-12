@@ -12,6 +12,10 @@ import (
 	"github.com/mbb200291/go-occ-z/occ/transaction"
 )
 
+// Satisfies Context without being a JSONL context; commands reject it before
+// calling any of the embedded interface methods.
+type nonJSONLContext struct{ transaction.Context }
+
 func fixture(t *testing.T, data string) string {
 	t.Helper()
 	t.Chdir(t.TempDir())
@@ -63,7 +67,7 @@ func TestPrivateWorkspaceDoesNotWriteBeforeCommit(t *testing.T) {
 	}
 	records := ctx.GetRecords([]uint{1})
 	records[0].(map[string]any)["x"] = "external mutation"
-	if err := ctx.Write("1"); err != nil {
+	if err := ctx.Write("1", ctx.GetOutcome("1")); err != nil {
 		t.Fatal(err)
 	}
 	data, _ = os.ReadFile(path)
@@ -155,7 +159,7 @@ func TestWritesToDifferentLinesPreserveBothChanges(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := v.ctx.Write(v.line); err != nil {
+			if err := v.ctx.Write(v.line, v.ctx.GetOutcome(v.line)); err != nil {
 				t.Error(err)
 			}
 		}()
@@ -207,7 +211,7 @@ func TestUpdateMetadataAndContextErrors(t *testing.T) {
 	if _, err := ctx.GetOutcomes(); err == nil {
 		t.Fatal("context did not retain command error")
 	}
-	if err := cmd.Execute(&transaction.ContextBase{}); err == nil {
+	if err := cmd.Execute(&nonJSONLContext{}); err == nil {
 		t.Fatal("wrong context type accepted")
 	}
 }
@@ -219,7 +223,7 @@ func TestRevertAfterErrorPreservesOtherLines(t *testing.T) {
 		func() error { return ctx.Load("1") },
 		func() error { return ctx.Backup("1") },
 		func() error { return NewUpdate(1, "$.x", 3).Execute(ctx) },
-		func() error { return ctx.Write("1") },
+		func() error { return ctx.Write("1", ctx.GetOutcome("1")) },
 	} {
 		if err := step(); err != nil {
 			t.Fatal(err)
@@ -230,10 +234,10 @@ func TestRevertAfterErrorPreservesOtherLines(t *testing.T) {
 		t.Fatal(err)
 	}
 	other.Update(2, map[string]any{"x": 4})
-	if err := other.Write("2"); err != nil {
+	if err := other.Write("2", other.GetOutcome("2")); err != nil {
 		t.Fatal(err)
 	}
-	if err := ctx.Write("0"); err == nil {
+	if err := ctx.Write("0", nil); err == nil {
 		t.Fatal("expected error")
 	}
 	for range 2 {

@@ -88,7 +88,7 @@ func decodeJSON(data []byte) (any, error) {
 }
 
 func cloneJSON(value any) (any, error) {
-	data, err := json.Serialize(value)
+	data, err := json.Marshal(value)
 	if err != nil {
 		return nil, err
 	}
@@ -125,19 +125,70 @@ func (ctx *JsonlContext) Load(target string) error {
 	return ctx.fail(err)
 }
 
-func (ctx *JsonlContext) Write(target string) error {
-	if ctx.err != nil {
-		return ctx.err
+// ReadTarget reads the shared line, including whitespace and its line ending.
+// It does not load or replace a record in the private workspace.
+func (ctx *JsonlContext) ReadTarget(target string) (any, error) {
+	line, err := parseLine(target)
+	if err != nil {
+		return nil, err
 	}
+	var original json.RawMessage
+	err = ctx.editLine(line, func(raw []byte) ([]byte, error) {
+		var err error
+		original, err = backupLine(raw)
+		return nil, err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return original, nil
+}
+
+// backupLine validates and copies exactly one physical JSONL record.
+func backupLine(data []byte) (json.RawMessage, error) {
+	if len(linesOf(data)) != 1 {
+		return nil, fmt.Errorf("JSONL backup must contain exactly one physical line")
+	}
+	if _, err := decodeJSON(data); err != nil {
+		return nil, err
+	}
+	return json.RawMessage(bytes.Clone(data)), nil
+}
+
+// Serialize preserves raw backups byte for byte; ordinary values use JSON.
+func (ctx *JsonlContext) Serialize(value any) ([]byte, error) {
+	if raw, ok := value.(json.RawMessage); ok {
+		return backupLine(raw)
+	}
+	return json.Marshal(value)
+}
+
+// UnSerialize returns a raw record that Write can restore without reformatting.
+func (ctx *JsonlContext) UnSerialize(data []byte) (any, error) {
+	return backupLine(data)
+}
+
+// Write installs the supplied value, independently of the private workspace.
+// A raw backup restores the original bytes. Previous command/write errors must
+// not prevent rollback from calling Write again with a valid backup.
+func (ctx *JsonlContext) Write(target string, value any) error {
 	line, err := parseLine(target)
 	if err != nil {
 		return ctx.fail(err)
 	}
-	value, ok := ctx.records[line]
-	if !ok {
-		return ctx.fail(fmt.Errorf("JSONL line %d is not loaded", line))
+	if outcomeErr, ok := value.(error); ok {
+		return ctx.fail(outcomeErr)
 	}
-	encoded, err := json.Serialize(value)
+	if raw, ok := value.(json.RawMessage); ok {
+		backup, err := backupLine(raw)
+		if err != nil {
+			return ctx.fail(err)
+		}
+		return ctx.fail(ctx.editLine(line, func([]byte) ([]byte, error) {
+			return backup, nil
+		}))
+	}
+	encoded, err := json.Marshal(value)
 	if err != nil {
 		return ctx.fail(err)
 	}
@@ -181,8 +232,25 @@ func (ctx *JsonlContext) Revert(target string) error {
 	return ctx.editLine(line, func([]byte) ([]byte, error) { return raw, nil })
 }
 
+// DiscardBackup applies only to the legacy in-memory Backup/Revert API.
+// Backups created by occ.Commit are owned and removed by the OCC package.
+func (ctx *JsonlContext) DiscardBackup(target string) error {
+	line, err := parseLine(target)
+	if err != nil {
+		return err
+	}
+	delete(ctx.backups, line)
+	return nil
+}
+
 // A nil replacement reads a line without rewriting the file.
 func (ctx *JsonlContext) editLine(line uint, edit func([]byte) ([]byte, error)) error {
+	if ctx.fileMu == nil {
+		if ctx.err != nil {
+			return ctx.err
+		}
+		return fmt.Errorf("JSONL context is not initialized")
+	}
 	ctx.fileMu.Lock()
 	defer ctx.fileMu.Unlock()
 	data, err := os.ReadFile(ctx.path)
@@ -190,14 +258,23 @@ func (ctx *JsonlContext) editLine(line uint, edit func([]byte) ([]byte, error)) 
 		return err
 	}
 	lines := linesOf(data)
-	if line > uint(len(lines)) {
+	if line == 0 || line > uint(len(lines)) {
 		return fmt.Errorf("JSONL line %d does not exist", line)
 	}
 	replacement, err := edit(lines[line-1])
 	if err != nil || replacement == nil {
 		return err
 	}
+	if line < uint(len(lines)) && !bytes.HasSuffix(replacement, []byte("\n")) {
+		return fmt.Errorf("JSONL line %d requires a trailing newline before the next record", line)
+	}
 	lines[line-1] = replacement
+	return ctx.replaceFile(bytes.Join(lines, nil))
+}
+
+// replaceFile is called with fileMu held. Persist data before replacing the
+// shared file, then sync the directory before reporting a successful write.
+func (ctx *JsonlContext) replaceFile(data []byte) error {
 	info, err := os.Stat(ctx.path)
 	if err != nil {
 		return err
@@ -211,13 +288,24 @@ func (ctx *JsonlContext) editLine(line uint, edit func([]byte) ([]byte, error)) 
 	if err := file.Chmod(info.Mode().Perm()); err != nil {
 		return err
 	}
-	if _, err := file.Write(bytes.Join(lines, nil)); err != nil {
+	if _, err := file.Write(data); err != nil {
+		return err
+	}
+	if err := file.Sync(); err != nil {
 		return err
 	}
 	if err := file.Close(); err != nil {
 		return err
 	}
-	return os.Rename(file.Name(), ctx.path)
+	if err := os.Rename(file.Name(), ctx.path); err != nil {
+		return err
+	}
+	dir, err := os.Open(filepath.Dir(ctx.path))
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
 }
 
 func (ctx *JsonlContext) record(line uint) (any, error) {
@@ -270,6 +358,24 @@ func (ctx *JsonlContext) appendOutcome(value any) error {
 	}
 	ctx.outcomes = append(ctx.outcomes, copy)
 	return nil
+}
+
+// GetOutcome returns the full private record to commit, not a command result.
+// The OCC interface has no error return; Write recognizes returned errors so
+// an unavailable record cannot accidentally be committed as JSON null.
+func (ctx *JsonlContext) GetOutcome(target string) any {
+	if ctx.err != nil {
+		return ctx.err
+	}
+	line, err := parseLine(target)
+	if err != nil {
+		return ctx.fail(err)
+	}
+	value, err := ctx.record(line)
+	if err != nil {
+		return err
+	}
+	return value
 }
 
 func (ctx *JsonlContext) GetOutcomes() ([]any, error) {
