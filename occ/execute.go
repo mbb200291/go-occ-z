@@ -73,6 +73,9 @@ type TransactionContainer interface {
 // prevTxn should use validate time as key
 // ongoingTxn should use read time as key
 func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error {
+	// ensure write time is max
+	txn.SetWriteTime(uint64(math.MaxInt64))
+
 	// read phase -- load read set to private zone
 	muR.Lock() // [+] lock
 	txn.SetReadTime(NextTimestamp())
