@@ -5,6 +5,7 @@ import (
 	"encoding/base32"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -213,10 +214,19 @@ func loadTargetsToRevert(txnId string) (map[string]bool, bool, error) {
 	defer file.Close()
 
 	committed := false
-	scanner := bufio.NewScanner(file)
+	reader := bufio.NewReader(file)
 
-	for scanner.Scan() {
-		line := scanner.Text()
+	for {
+		line, err := reader.ReadString('\n')
+		if errors.Is(err, io.EOF) {
+			break // ignore incomplete log without trailing newline
+		}
+		if err != nil {
+			return nil, false, err
+		}
+
+		line = strings.TrimSuffix(line, "\n")
+		line = strings.TrimSuffix(line, "\r")
 
 		if committed {
 			return nil, false, fmt.Errorf(
@@ -229,13 +239,18 @@ func loadTargetsToRevert(txnId string) (map[string]bool, bool, error) {
 			continue
 		}
 
-		action, target, ok := strings.Cut(line, " ")
-		if !ok || target == "" {
+		action, targetR, ok := strings.Cut(line, " ")
+		if !ok || targetR == "" {
 			return nil, false, fmt.Errorf(
 				"invalid log entry: %q", line,
 			)
 		}
-
+		target, err := decodeTarget(targetR)
+		if err != nil {
+			return nil, false, fmt.Errorf(
+				"invalid log entry: %q", line,
+			)
+		}
 		switch action {
 		case "WRITE":
 			toRevert[target] = true
@@ -246,10 +261,6 @@ func loadTargetsToRevert(txnId string) (map[string]bool, bool, error) {
 				"unknown log action: %q", action,
 			)
 		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, false, err
 	}
 
 	return toRevert, committed, nil
@@ -272,7 +283,7 @@ func appendLog(txnId, action, target string) error {
 	}
 	defer file.Close()
 
-	if _, err := fmt.Fprintf(file, "%s %s\n", action, target); err != nil {
+	if _, err := fmt.Fprintf(file, "%s %s\n", action, encodeTarget(target)); err != nil {
 		return err
 	}
 
@@ -280,7 +291,7 @@ func appendLog(txnId, action, target string) error {
 }
 
 func cleanupLogs(txnId string) error {
-	path := filepath.Join(".commit", filepath.Join(txnId))
+	path := filepath.Join(".commit", filepath.Join(encodeTarget(txnId)))
 	if err := os.RemoveAll(path); err != nil { // won't return error when file already removed (not exist)
 		return err
 	}
