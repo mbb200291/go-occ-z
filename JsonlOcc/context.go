@@ -88,7 +88,7 @@ func decodeJSON(data []byte) (any, error) {
 }
 
 func cloneJSON(value any) (any, error) {
-	data, err := json.Marshal(value)
+	data, err := json.Serialize(value)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +137,7 @@ func (ctx *JsonlContext) Write(target string) error {
 	if !ok {
 		return ctx.fail(fmt.Errorf("JSONL line %d is not loaded", line))
 	}
-	encoded, err := json.Marshal(value)
+	encoded, err := json.Serialize(value)
 	if err != nil {
 		return ctx.fail(err)
 	}
@@ -179,15 +179,6 @@ func (ctx *JsonlContext) Revert(target string) error {
 	}
 	// Rollback must work even when the context has retained a write error.
 	return ctx.editLine(line, func([]byte) ([]byte, error) { return raw, nil })
-}
-
-func (ctx *JsonlContext) DiscardBackup(target string) error {
-	line, err := parseLine(target)
-	if err != nil {
-		return err
-	}
-	delete(ctx.backups, line)
-	return nil
 }
 
 // A nil replacement reads a line without rewriting the file.

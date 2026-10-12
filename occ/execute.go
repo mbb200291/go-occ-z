@@ -49,16 +49,16 @@ type Transaction interface {
 	GetWriteSet() Set
 	GetReadSet() Set
 
-	Read() error        // aka. fetch
-	Write(string) error // write one target
+	Read() error // aka. fetch
+	ReadTarget(string) (any, error)
+	Write(string, any) error // write one target
 	Execute() error
 
 	GetOutcomes() ([]any, error)
+	GetOutcome(string) any
 
-	Backup(string) error
-	Revert(string) error
-	DiscardBackup(string) error
-
+	Serialize(any) ([]byte, error)
+	UnSerialize([]byte) (any, error)
 	GetID() string
 }
 
@@ -73,6 +73,9 @@ type TransactionContainer interface {
 // prevTxn should use validate time as key
 // ongoingTxn should use read time as key
 func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error {
+	// ensure write time is max
+	txn.SetWriteTime(uint64(math.MaxInt64))
+
 	// read phase -- load read set to private zone
 	muR.Lock() // [+] lock
 	txn.SetReadTime(NextTimestamp())
@@ -111,17 +114,23 @@ func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error 
 
 	// run validate
 	if outcome := Validate(txn, prevTxns, minTxnReadTime); !outcome {
+		prevTxns.Remove(txn)
 		return errors.New("read-write lock")
 	}
 
 	// write phase -- finalize changes to production zone
 	err = Commit(txn)
-	if err != nil {
-		prevTxns.Remove(txn)
-		return err
-	}
 
+	// mark write time after write phase -- no matter commit success or not, mark the dirty write time range
 	txn.SetWriteTime(NextTimestamp())
+
+	// raise err of commit phase
+	if err != nil {
+		return errors.Join(
+			errors.New("commit fail"),
+			err,
+		)
+	}
 
 	return nil
 }
