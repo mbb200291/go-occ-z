@@ -19,7 +19,7 @@ jobs:
       - name: Check pinned PoHW verifier code
         shell: bash
         run: |
-          echo "9f35a7f6f7c281b9df8b0e79502cf48c5081f2f4d6abec4b925f8b3ce5618792  .pohw/proof.js" | sha256sum --check --status
+          echo "694fa7425fb54c64d0a9348e066e8e184f88f2ab0c6db5653853fe61dcd8489f  .pohw/proof.js" | sha256sum --check --status
           echo "4abf33a3d6e1233ed0c1dc1a9b9a7135a7cf527304e875c6dada19455e4239cf  .pohw/verify.cjs" | sha256sum --check --status
       - name: Wait for separately pushed signed evidence
         shell: bash
@@ -77,18 +77,21 @@ jobs:
             }
             const score = v.humanScore === 'N/A' ? 'N/A' : String(v.humanScore) + '%';
             const coverage = String(v.monitoredCoverage) + '%';
-            const message = 'Human ' + score + ' | Coverage ' + coverage;
-            const svg = [
-              '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="20" viewBox="0 0 300 20" role="img" aria-label="PoHW: ' + message + '">',
-              '<title>PoHW: ' + message + '</title>',
-              '<rect width="300" height="20" rx="3" fill="#087f8c"/>',
-              '<path d="M3 0h52v20H3Q0 20 0 17V3Q0 0 3 0Z" fill="#555"/>',
-              '<g fill="#fff" text-anchor="middle" font-family="Verdana,DejaVu Sans,sans-serif" font-size="11">',
-              '<text x="28" y="14">PoHW</text>',
-              '<text x="177" y="14">' + message + '</text>',
-              '</g></svg>', ''
-            ].join('\n');
-            fs.writeFileSync(path.join(out,'badge.svg'), svg);
+            const makeBadge = (label, value, labelWidth, color) => {
+              const valueWidth = 64, width = labelWidth + valueWidth;
+              return [
+                '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="20" viewBox="0 0 ' + width + ' 20" role="img" aria-label="' + label + ': ' + value + '">',
+                '<title>' + label + ': ' + value + '</title>',
+                '<rect width="' + width + '" height="20" rx="3" fill="' + color + '"/>',
+                '<path d="M3 0h' + (labelWidth-3) + 'v20H3Q0 20 0 17V3Q0 0 3 0Z" fill="#555"/>',
+                '<g fill="#fff" text-anchor="middle" font-family="Verdana,DejaVu Sans,sans-serif" font-size="11">',
+                '<text x="' + (labelWidth/2) + '" y="14">' + label + '</text>',
+                '<text x="' + (labelWidth + valueWidth/2) + '" y="14">' + value + '</text>',
+                '</g></svg>', ''
+              ].join('\n');
+            };
+            fs.writeFileSync(path.join(out,'editing.svg'), makeBadge('PoHW Editing', score, 100, '#087f8c'));
+            fs.writeFileSync(path.join(out,'coverage.svg'), makeBadge('PoHW Coverage', coverage, 112, '#3178a4'));
             fs.copyFileSync(source, path.join(out,'summary.json'));
             const base = 'https://github.com/' + repo;
             report.push('# PoHW Verified Editing Report', '',
@@ -107,8 +110,10 @@ jobs:
           } else {
             // One transparent pixel keeps invalid percentage data off the README.
             fs.rmSync(path.join(out,'summary.json'), {force:true});
-            fs.writeFileSync(path.join(out,'badge.svg'),
-              '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" viewBox="0 0 1 1"></svg>\n');
+            for (const file of ['editing.svg', 'coverage.svg']) {
+              fs.writeFileSync(path.join(out,file),
+                '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" viewBox="0 0 1 1"></svg>\n');
+            }
             report.push('# PoHW Evidence Unavailable', '',
               'Verification failed for ' + commit + '. No human score or coverage is published.', '',
               'See the GitHub Actions verification workflow for details.', '');
@@ -128,7 +133,9 @@ jobs:
             git switch --orphan pohw-badges-generated
             git rm -rf --ignore-unmatch . >/dev/null
           fi
-          cp "$BADGE_OUTPUT/badge.svg" badge.svg
+          cp "$BADGE_OUTPUT/editing.svg" editing.svg
+          cp "$BADGE_OUTPUT/coverage.svg" coverage.svg
+          rm -f badge.svg
           cp "$BADGE_OUTPUT/REPORT.md" REPORT.md
           if test -f "$BADGE_OUTPUT/summary.json"; then
             cp "$BADGE_OUTPUT/summary.json" summary.json

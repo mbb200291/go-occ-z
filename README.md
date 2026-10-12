@@ -1,5 +1,5 @@
 <!-- pohw-badges:start -->
-[![PoHW Human Editing Score and Monitored Coverage](https://raw.githubusercontent.com/mbb200291/go-occ-z/pohw-badges/badge.svg)](https://github.com/mbb200291/go-occ-z/blob/pohw-badges/REPORT.md)
+[![PoHW Editing Evidence Score](https://raw.githubusercontent.com/mbb200291/go-occ-z/pohw-badges/editing.svg)](https://github.com/mbb200291/go-occ-z/blob/pohw-badges/REPORT.md) [![PoHW Monitored Coverage](https://raw.githubusercontent.com/mbb200291/go-occ-z/pohw-badges/coverage.svg)](https://github.com/mbb200291/go-occ-z/blob/pohw-badges/REPORT.md)
 <!-- pohw-badges:end -->
 
 # go-occ-z

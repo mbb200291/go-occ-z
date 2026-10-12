@@ -306,7 +306,7 @@ func cleanupBackups(txnId string) error {
 }
 
 // to read unfinished txn in txn logs and carry on undone txn rollback works
-// will only revert change (woun't carry out commit)
+// will only revert change (won't carry out commit)
 func TidyUp(transactionFactory func(string) (Transaction, error)) error {
 	entries, err := os.ReadDir(".commit")
 	if os.IsNotExist(err) {
