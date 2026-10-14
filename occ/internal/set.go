@@ -1,9 +1,9 @@
-package transaction
+package occ
 
 import (
 	"iter"
 
-	"github.com/mbb200291/go-occ-z/occ"
+	occ "github.com/mbb200291/go-occ-z/occ/internal/core"
 )
 
 type Set map[string]struct{}

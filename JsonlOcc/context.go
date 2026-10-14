@@ -168,18 +168,18 @@ func (ctx *JsonlContext) Backup(target string) error {
 	}))
 }
 
-func (ctx *JsonlContext) Revert(target string) error {
-	line, err := parseLine(target)
-	if err != nil {
-		return err
-	}
-	raw, ok := ctx.backups[line]
-	if !ok {
-		return fmt.Errorf("JSONL line %d has no backup", line)
-	}
-	// Rollback must work even when the context has retained a write error.
-	return ctx.editLine(line, func([]byte) ([]byte, error) { return raw, nil })
-}
+// func (ctx *JsonlContext) Revert(target string) error {
+// 	line, err := parseLine(target)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	raw, ok := ctx.backups[line]
+// 	if !ok {
+// 		return fmt.Errorf("JSONL line %d has no backup", line)
+// 	}
+// 	// Rollback must work even when the context has retained a write error.
+// 	return ctx.editLine(line, func([]byte) ([]byte, error) { return raw, nil })
+// }
 
 // A nil replacement reads a line without rewriting the file.
 func (ctx *JsonlContext) editLine(line uint, edit func([]byte) ([]byte, error)) error {

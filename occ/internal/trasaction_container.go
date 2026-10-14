@@ -1,6 +1,6 @@
-package transaction
+package occ
 
-import "github.com/mbb200291/go-occ-z/occ"
+import occ "github.com/mbb200291/go-occ-z/occ/internal/core"
 
 type OrderedMap interface {
 	Add(uint64, occ.Transaction)
@@ -36,9 +36,9 @@ func (tc TransactionContainer) IterTill(
 	tc.om.IterTill(timeStamp, callback)
 }
 
-func NewTransactionContainer(om *OrderedMap, keySelector func(occ.Transaction) uint64) *TransactionContainer {
+func NewTransactionContainer(om OrderedMap, keySelector func(occ.Transaction) uint64) occ.TransactionContainer {
 	return &TransactionContainer{
-		om:          *om,
+		om:          om,
 		keySelector: keySelector,
 	}
 }

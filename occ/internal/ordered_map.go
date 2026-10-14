@@ -1,7 +1,7 @@
-package transaction
+package occ
 
 import (
-	"github.com/mbb200291/go-occ-z/occ"
+	occ "github.com/mbb200291/go-occ-z/occ/internal/core"
 	"github.com/zhangyunhao116/skipmap"
 )
 

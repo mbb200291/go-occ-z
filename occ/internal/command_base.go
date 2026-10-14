@@ -1,4 +1,4 @@
-package transaction
+package occ
 
 type CommandBase struct {
 	readOnly  bool

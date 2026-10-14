@@ -1,11 +1,11 @@
-package transaction
+package occ
 
 import (
 	"crypto/rand"
 	"math"
 	"sync/atomic"
 
-	"github.com/mbb200291/go-occ-z/occ"
+	occ "github.com/mbb200291/go-occ-z/occ/internal/core"
 )
 
 type Context interface {
@@ -16,7 +16,7 @@ type Context interface {
 	GetOutcome(string) any
 	Serialize(any) ([]byte, error)
 	UnSerialize([]byte) (any, error)
-	Revert(string) error
+	// Revert(string) error
 }
 
 type Command interface {
@@ -66,10 +66,6 @@ func NewTransaction(cmds []Command, ctx Context) *Transaction {
 }
 
 func (txn *Transaction) GetID() string { return txn.id }
-
-func (txn *Transaction) Revert(target string) error {
-	return txn.ctx.Revert(target)
-}
 
 func (txn *Transaction) GetReadTime() uint64 {
 	return txn.readTime.Load()

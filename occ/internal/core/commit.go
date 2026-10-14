@@ -144,6 +144,44 @@ func Withdraw(txn Transaction) error {
 	return nil
 }
 
+// to read unfinished txn in txn logs and carry on undone txn rollback works
+// will only revert change (won't carry out commit)
+func TidyUp(transactionFactory func(string) (Transaction, error)) error {
+	entries, err := os.ReadDir(".commit")
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	var errs []error
+
+	for _, entry := range entries {
+		if !entry.Type().IsRegular() {
+			continue
+		}
+		txnId, err := decodeTarget(entry.Name())
+		if err != nil {
+			log.Printf("decode target txnId %s: %v", txnId, err)
+			continue
+		}
+
+		var txn Transaction
+		txn, err = transactionFactory(txnId)
+		if err == nil {
+			err = Withdraw(txn)
+		}
+		if err != nil {
+			errs = append(errs, fmt.Errorf(
+				"failed to recover txn %s: %w", txnId, err,
+			))
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
 func discardBackup(txnId, target string) error {
 	if err := os.Remove(filepath.Join(".backup", encodeTarget(txnId), encodeTarget(target))); err != nil && !os.IsNotExist(err) {
 		return err
@@ -283,7 +321,11 @@ func appendLog(txnId, action, target string) error {
 	}
 	defer file.Close()
 
-	if _, err := fmt.Fprintf(file, "%s %s\n", action, encodeTarget(target)); err != nil {
+	line := action + "\n"
+	if action != "COMMIT" {
+		line = action + " " + encodeTarget(target) + "\n"
+	}
+	if _, err := file.WriteString(line); err != nil {
 		return err
 	}
 
@@ -299,46 +341,8 @@ func cleanupLogs(txnId string) error {
 }
 
 func cleanupBackups(txnId string) error {
-	if err := os.RemoveAll(filepath.Join(".backup", filepath.Join(txnId))); err != nil {
+	if err := os.RemoveAll(filepath.Join(".backup", encodeTarget(txnId))); err != nil {
 		return err
 	}
 	return nil
-}
-
-// to read unfinished txn in txn logs and carry on undone txn rollback works
-// will only revert change (won't carry out commit)
-func TidyUp(transactionFactory func(string) (Transaction, error)) error {
-	entries, err := os.ReadDir(".commit")
-	if os.IsNotExist(err) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-
-	var errs []error
-
-	for _, entry := range entries {
-		if !entry.Type().IsRegular() {
-			continue
-		}
-		txnId, err := decodeTarget(entry.Name())
-		if err != nil {
-			log.Printf("decode target txnId %s: %v", txnId, err)
-			continue
-		}
-
-		var txn Transaction
-		txn, err = transactionFactory(txnId)
-		if err == nil {
-			err = Withdraw(txn)
-		}
-		if err != nil {
-			errs = append(errs, fmt.Errorf(
-				"failed to recover txn %s: %w", txnId, err,
-			))
-		}
-	}
-
-	return errors.Join(errs...)
 }
