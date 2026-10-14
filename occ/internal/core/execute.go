@@ -2,6 +2,7 @@ package occ
 
 import (
 	"errors"
+	"fmt"
 	"iter"
 	"math"
 	"sync"
@@ -121,16 +122,19 @@ func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error 
 	// write phase -- finalize changes to production zone
 	err = Commit(txn)
 
-	// mark write time after write phase -- no matter commit success or not, mark the dirty write time range
-	txn.SetWriteTime(NextTimestamp())
-
-	// raise err of commit phase
 	if err != nil {
-		return errors.Join(
-			errors.New("commit fail"),
-			err,
-		)
+		commitErr := fmt.Errorf("commit fail: %w", err)
+		if rollbackErr := Withdraw(txn); rollbackErr != nil {
+			// encounter rollback fail, throw panic.
+			// System should recovery by run tidyup
+			panic(errors.Join(commitErr, fmt.Errorf("rollback fail: %w", rollbackErr)))
 	}
+		// the dirty interval includes rollback
+		txn.SetWriteTime(NextTimestamp())
+		return commitErr
+	}
+
+	txn.SetWriteTime(NextTimestamp())
 
 	return nil
 }

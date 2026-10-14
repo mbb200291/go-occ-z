@@ -12,52 +12,36 @@ import (
 	"strings"
 )
 
+// Commit writes the transaction and returns failures without rolling back.
+// The caller controls rollback and handles rollback failures.
 func Commit(txn Transaction) error {
 	for target := range txn.GetWriteSet().All() {
 		// backup target
 		ori, err := txn.ReadTarget(target)
 		if err != nil {
-			if rollbackErr := Withdraw(txn); rollbackErr != nil {
-				log.Panic(errors.Join(err, rollbackErr).Error())
-			}
 			return err
 		}
 		oriB, err := txn.Serialize(ori)
 		if err != nil {
-			if rollbackErr := Withdraw(txn); rollbackErr != nil {
-				log.Panic(errors.Join(err, rollbackErr).Error())
-			}
 			return err
 		}
 		if err := saveBackup(txn.GetID(), target, oriB); err != nil {
-			if rollbackErr := Withdraw(txn); rollbackErr != nil {
-				log.Panic(errors.Join(err, rollbackErr).Error())
-			}
 			return err
 		}
 
 		// write log first, even target not been write -> idempotent recover by backup
 		if err := appendLog(txn.GetID(), "WRITE", target); err != nil {
-			if rollbackErr := Withdraw(txn); rollbackErr != nil {
-				log.Panic(errors.Join(err, rollbackErr).Error())
-			}
 			return err
 		}
 
 		// write target
 		if err := txn.Write(target, txn.GetOutcome(target)); err != nil {
-			if rollbackErr := Withdraw(txn); rollbackErr != nil {
-				log.Panic(errors.Join(err, rollbackErr).Error())
-			}
 			return err
 		}
 	}
 
 	// write COMMIT log
 	if err := appendLog(txn.GetID(), "COMMIT", ""); err != nil {
-		if rollbackErr := Withdraw(txn); rollbackErr != nil {
-			log.Panic(errors.Join(err, rollbackErr).Error())
-		}
 		return err
 
 	}
