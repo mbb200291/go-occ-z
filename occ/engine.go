@@ -6,6 +6,11 @@ import (
 	core "github.com/mbb200291/go-occ-z/occ/internal/core"
 )
 
+type Context = imp.Context
+type Command = imp.Command
+type Transaction = imp.Transaction
+type Set = core.Set
+
 type Engine struct {
 	prevTxn    core.TransactionContainer
 	ongoingTxn core.TransactionContainer
@@ -19,7 +24,7 @@ func NewEngine() *Engine {
 	return &eg
 }
 
-func (eg *Engine) Execute(txn *imp.Transaction) ([]any, error) {
+func (eg *Engine) Execute(txn *Transaction) ([]any, error) {
 	if err := core.Execute(txn, eg.prevTxn, eg.ongoingTxn); err != nil {
 		return nil, err
 	}
@@ -30,6 +35,6 @@ func (eg *Engine) TidyUp(ctx Context) error {
 	return core.TidyUp(imp.GetTransactionFactory(ctx))
 }
 
-func (eg *Engine) NewTransaction(cmds []imp.Command, ctx Context) *imp.Transaction {
+func (eg *Engine) newTransaction(cmds []Command, ctx Context) *Transaction {
 	return imp.NewTransaction(cmds, ctx)
 }
