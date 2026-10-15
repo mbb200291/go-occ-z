@@ -11,7 +11,7 @@ try {
   const publicKey = fs.readFileSync(path.join(root, '.pohw', 'public-key.pem'), 'utf8');
   const current = require('node:child_process').execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
   if (receipt.body.targetCommit !== current) throw new Error('Receipt target commit does not match checked-out Git HEAD');
-  verifySignedReceipt(receipt, publicKey, codeManifestForCommit(root, current));
+  verifySignedReceipt(receipt, publicKey, codeManifestForCommit(root, current), root);
   const summary = verifiedBadgeSummary(receipt, current);
   if (process.argv[4]) fs.writeFileSync(process.argv[4], JSON.stringify(summary, null, 2) + '\n');
   console.log(`PoHW receipt verified; source commit=${current}; assurance=self-attested`);

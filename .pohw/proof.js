@@ -50,7 +50,7 @@ const node_crypto_1 = require("node:crypto");
 const node_child_process_1 = require("node:child_process");
 const fs = __importStar(require("node:fs"));
 const path = __importStar(require("node:path"));
-exports.RECEIPT_VERSION = 'pohw-editing-receipt/v2';
+exports.RECEIPT_VERSION = 'pohw-editing-receipt/v3';
 const EXCLUDED = new Set(['.git', '.pohw', 'node_modules', 'dist', 'out', 'build', 'coverage', '.venv', 'venv']);
 const EXTENSIONS = new Set(['.go', '.ts', '.tsx', '.js', '.jsx', '.py', '.rs', '.java', '.c', '.h', '.cpp', '.hpp', '.cs', '.rb', '.php', '.swift', '.kt', '.kts', '.sh', '.sql', '.vue', '.svelte', '.html', '.css', '.json', '.yaml', '.yml', '.toml', '.md', '.xml', '.proto']);
 const sha256 = (data) => (0, node_crypto_1.createHash)('sha256').update(data).digest('hex');
@@ -147,11 +147,11 @@ function issueReceipt(body, privateKeyPem) {
     return { body, signature };
 }
 function validPercent(x) { return typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 100; }
-function verifySignedReceipt(receipt, publicKeyPem, manifest) {
+function verifySignedReceipt(receipt, publicKeyPem, manifest, repositoryRoot) {
     if (!receipt || !receipt.body || typeof receipt.signature !== 'string')
         throw new Error('Malformed PoHW receipt');
     const body = receipt.body;
-    if (body.schema !== exports.RECEIPT_VERSION || body.claim !== 'self-attested-editor-behavior')
+    if (!['pohw-editing-receipt/v2', exports.RECEIPT_VERSION].includes(body.schema) || body.claim !== 'self-attested-editor-behavior')
         throw new Error('Unsupported PoHW receipt claim/schema');
     if (!/^[a-f0-9]{40}$/.test(body.targetCommit))
         throw new Error('Invalid target commit in receipt');
@@ -161,7 +161,7 @@ function verifySignedReceipt(receipt, publicKeyPem, manifest) {
         throw new Error('Code content does not match signed receipt (rerun PoHW Publish Signed Receipt)');
     }
     const m = body.metrics;
-    if (!m || m.algorithm !== 'rule-based-v0.1' || !Number.isSafeInteger(m.units) || !Number.isSafeInteger(m.monitoredUnits) ||
+    if (!m || !['rule-based-v0.1', 'rule-based-v0.2'].includes(m.algorithm) || !Number.isSafeInteger(m.units) || !Number.isSafeInteger(m.monitoredUnits) ||
         m.units < 0 || m.monitoredUnits < 0 || m.monitoredUnits > m.units ||
         !validPercent(m.coveragePercent) || (m.scorePercent !== null && !validPercent(m.scorePercent)) ||
         (m.monitoredUnits === 0 && m.scorePercent !== null) ||
@@ -178,6 +178,52 @@ function verifySignedReceipt(receipt, publicKeyPem, manifest) {
     catch { /* reject */ }
     if (!ok)
         throw new Error('Receipt signature verification failed');
+    // v2 receipts remain verifiable, but contain no inheritable span provenance.
+    if (body.schema === exports.RECEIPT_VERSION) {
+        if (!repositoryRoot || !body.provenance || body.provenance.version !== 1 ||
+            !Array.isArray(body.provenance.files) || body.provenance.files.length !== manifest.files.length) {
+            throw new Error('Signed span provenance or repository root is missing');
+        }
+        let units = 0, monitored = 0, weighted = 0, count = 0;
+        for (let i = 0; i < manifest.files.length; i++) {
+            const f = manifest.files[i], from = body.provenance.files[i];
+            if (!from || from.path !== f.path || !Array.isArray(from.spans) || from.spans.length > 200000) {
+                throw new Error('Provenance path/span layout differs from committed source');
+            }
+            const content = gitCommitFile(repositoryRoot, body.targetCommit, f.path);
+            if (content === null || sha256(Buffer.from(content)) !== f.sha256)
+                throw new Error('Committed source unavailable');
+            let offset = 0;
+            for (const span of from.spans) {
+                if (!Array.isArray(span) || span.length !== 3)
+                    throw new Error('Invalid provenance span');
+                const [length, score, origin] = span;
+                if (!Number.isSafeInteger(length) || length <= 0 || offset + length > content.length ||
+                    !(score === null || (typeof score === 'number' && Number.isFinite(score) && score >= 0 && score <= 1)) ||
+                    !['baseline', 'incremental', 'bulk', 'move', 'external'].includes(origin)) {
+                    throw new Error('Invalid signed provenance data');
+                }
+                const size = content.slice(offset, offset + length).replace(/\s/g, '').length;
+                units += size;
+                if (score !== null) {
+                    monitored += size;
+                    weighted += score * size;
+                }
+                offset += length;
+                count++;
+                if (count > 1000000)
+                    throw new Error('Provenance is too large');
+            }
+            if (offset !== content.length)
+                throw new Error('Provenance span lengths mismatch');
+        }
+        const expectedCoverage = units ? Math.round(monitored / units * 10000) / 100 : 0;
+        const expectedScore = monitored ? Math.round(weighted / monitored * 10000) / 100 : null;
+        if (units !== m.units || monitored !== m.monitoredUnits ||
+            Math.abs(expectedCoverage - m.coveragePercent) > 0.001 || expectedScore !== m.scorePercent) {
+            throw new Error('Provenance does not match the signed score/coverage');
+        }
+    }
 }
 /** This is only ever published after the signed receipt was independently checked. */
 function verifiedBadgeSummary(receipt, sourceCommit) {
@@ -191,7 +237,7 @@ function verifiedBadgeSummary(receipt, sourceCommit) {
         issuedAt: receipt.body.issuedAt
     };
 }
-/** Separate editing and coverage badges are generated only after CI verifies the signed receipt. */
+/** CI issues independent editing/coverage badges only when the signed receipt verifies. */
 function badgeMarkdown(owner, repo, _defaultBranch) {
     const base = `https://raw.githubusercontent.com/${owner}/${repo}/pohw-badges`;
     const report = `https://github.com/${owner}/${repo}/blob/pohw-badges/REPORT.md`;

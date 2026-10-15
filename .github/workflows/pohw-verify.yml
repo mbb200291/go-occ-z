@@ -19,8 +19,8 @@ jobs:
       - name: Check pinned PoHW verifier code
         shell: bash
         run: |
-          echo "694fa7425fb54c64d0a9348e066e8e184f88f2ab0c6db5653853fe61dcd8489f  .pohw/proof.js" | sha256sum --check --status
-          echo "4abf33a3d6e1233ed0c1dc1a9b9a7135a7cf527304e875c6dada19455e4239cf  .pohw/verify.cjs" | sha256sum --check --status
+          echo "5ed26903744793a57c297f9ea9f90f6145a2fca89e89271343aeef491dabefe4  .pohw/proof.js" | sha256sum --check --status
+          echo "c642e2f660fe93f138111b38364d0125e4f400b22a72c1d2eb9fd6bfb4056c54  .pohw/verify.cjs" | sha256sum --check --status
       - name: Wait for separately pushed signed evidence
         shell: bash
         run: |
