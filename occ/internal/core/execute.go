@@ -11,6 +11,8 @@ import (
 
 var timestamp atomic.Uint64
 
+var ErrConflict = errors.New("read-write lock")
+
 // var maxtimestamp atomic.Uint64
 var muR sync.RWMutex
 var muV sync.RWMutex
@@ -90,13 +92,13 @@ func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error 
 
 	err := txn.Read()
 	if err != nil {
-		return err
+		return fmt.Errorf("read phase failed: %w", err)
 	}
 
 	// execute transaction optimicaly
 	err = txn.Execute()
 	if err != nil {
-		return err
+		return fmt.Errorf("execution phase failed: %w", err)
 	}
 
 	// set validate
@@ -116,7 +118,7 @@ func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error 
 	// run validate
 	if outcome := Validate(txn, prevTxns, minTxnReadTime); !outcome {
 		prevTxns.Remove(txn)
-		return errors.New("read-write lock")
+		return ErrConflict
 	}
 
 	// write phase -- finalize changes to production zone
@@ -128,7 +130,7 @@ func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error 
 			// encounter rollback fail, throw panic.
 			// System should recovery by run tidyup
 			panic(errors.Join(commitErr, fmt.Errorf("rollback fail: %w", rollbackErr)))
-	}
+		}
 		// the dirty interval includes rollback
 		txn.SetWriteTime(NextTimestamp())
 		return commitErr

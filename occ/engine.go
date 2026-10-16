@@ -11,6 +11,8 @@ type Command = imp.Command
 type Transaction = imp.Transaction
 type Set = core.Set
 
+var ErrConflict = core.ErrConflict
+
 type Engine struct {
 	prevTxn    core.TransactionContainer
 	ongoingTxn core.TransactionContainer
@@ -35,6 +37,6 @@ func (eg *Engine) TidyUp(ctx Context) error {
 	return core.TidyUp(imp.GetTransactionFactory(ctx))
 }
 
-func (eg *Engine) newTransaction(cmds []Command, ctx Context) *Transaction {
+func (eg *Engine) NewTransaction(cmds []Command, ctx Context) *Transaction {
 	return imp.NewTransaction(cmds, ctx)
 }
