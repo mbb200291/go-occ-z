@@ -128,7 +128,7 @@ func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error 
 			// encounter rollback fail, throw panic.
 			// System should recovery by run tidyup
 			panic(errors.Join(commitErr, fmt.Errorf("rollback fail: %w", rollbackErr)))
-	}
+		}
 		// the dirty interval includes rollback
 		txn.SetWriteTime(NextTimestamp())
 		return commitErr

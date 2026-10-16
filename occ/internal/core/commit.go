@@ -61,10 +61,7 @@ func Commit(txn Transaction) error {
 }
 
 // revert target to backup when txn not yet complete write target and remove intermediate products
-func Withdraw(txn Transaction) error {
-
-	id := txn.GetID()
-
+func Withdraw(id string, adpt TargetAdapter) error {
 	// load log files, determine target to revert
 	toRevert, committed, err := loadTargetsToRevert(id)
 	if err != nil {
@@ -86,7 +83,7 @@ func Withdraw(txn Transaction) error {
 				)
 			}
 
-			ori, err := txn.UnSerialize(orib)
+			ori, err := adpt.UnSerialize(orib)
 			if err != nil {
 				return fmt.Errorf(
 					"failed to unserialize backup for %q: %w",
@@ -95,7 +92,7 @@ func Withdraw(txn Transaction) error {
 			}
 
 			// revert target
-			if err := txn.Write(target, ori); err != nil {
+			if err := adpt.Write(target, ori); err != nil {
 				return fmt.Errorf(
 					"failed to revert target %q: %w",
 					target, err,
@@ -128,9 +125,16 @@ func Withdraw(txn Transaction) error {
 	return nil
 }
 
+type TargetAdapter interface {
+	Read(string) (any, error)
+	Write(string, any) error
+	Serialize(any) ([]byte, error)
+	UnSerialize([]byte) (any, error)
+}
+
 // to read unfinished txn in txn logs and carry on undone txn rollback works
 // will only revert change (won't carry out commit)
-func TidyUp(transactionFactory func(string) (Transaction, error)) error {
+func Recovery(adpt TargetAdapter) error {
 	entries, err := os.ReadDir(".commit")
 	if os.IsNotExist(err) {
 		return nil
@@ -151,11 +155,7 @@ func TidyUp(transactionFactory func(string) (Transaction, error)) error {
 			continue
 		}
 
-		var txn Transaction
-		txn, err = transactionFactory(txnId)
-		if err == nil {
-			err = Withdraw(txn)
-		}
+		err = Withdraw(txnId, adpt)
 		if err != nil {
 			errs = append(errs, fmt.Errorf(
 				"failed to recover txn %s: %w", txnId, err,

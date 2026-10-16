@@ -9,14 +9,9 @@ import (
 )
 
 type Context interface {
-	Load(string) error
-	ReadTarget(string) (any, error) // reads shared data for backup without changing the private workspace.
-	Write(string, any) error
 	GetOutcomes() ([]any, error)
 	GetOutcome(string) any
-	Serialize(any) ([]byte, error)
-	UnSerialize([]byte) (any, error)
-	// Revert(string) error
+	SetOutcome(string, any)
 }
 
 type Command interface {
@@ -26,7 +21,7 @@ type Command interface {
 	GetTargets() []string
 }
 
-type Transaction struct {
+type OccTransaction struct {
 	id   string
 	cmds []Command
 
@@ -37,11 +32,12 @@ type Transaction struct {
 	readSet  Set
 	writeSet Set
 
-	ctx Context
+	ctx       Context
+	targetAdp occ.TargetAdapter
 }
 
-func NewTransaction(cmds []Command, ctx Context) *Transaction {
-	txn := &Transaction{
+func NewOccTransaction(cmds []Command, ctx Context) *OccTransaction {
+	txn := &OccTransaction{
 		id:       rand.Text(),
 		cmds:     append([]Command(nil), cmds...),
 		ctx:      ctx,
@@ -65,60 +61,62 @@ func NewTransaction(cmds []Command, ctx Context) *Transaction {
 	return txn
 }
 
-func (txn *Transaction) GetID() string { return txn.id }
+func (txn *OccTransaction) GetID() string { return txn.id }
 
-func (txn *Transaction) GetReadTime() uint64 {
+func (txn *OccTransaction) GetReadTime() uint64 {
 	return txn.readTime.Load()
 }
 
-func (txn *Transaction) GetWriteTime() uint64 {
+func (txn *OccTransaction) GetWriteTime() uint64 {
 	return txn.writeTime.Load()
 }
 
-func (txn *Transaction) GetValidateTime() uint64 {
+func (txn *OccTransaction) GetValidateTime() uint64 {
 	return txn.validateTime.Load()
 }
 
-func (txn *Transaction) SetReadTime(t uint64) {
+func (txn *OccTransaction) SetReadTime(t uint64) {
 	txn.readTime.Store(t)
 }
 
-func (txn *Transaction) SetWriteTime(t uint64) {
+func (txn *OccTransaction) SetWriteTime(t uint64) {
 	txn.writeTime.Store(t)
 }
 
-func (txn *Transaction) SetValidateTime(t uint64) {
+func (txn *OccTransaction) SetValidateTime(t uint64) {
 	txn.validateTime.Store(t)
 }
 
-func (txn *Transaction) GetWriteSet() occ.Set {
+func (txn *OccTransaction) GetWriteSet() occ.Set {
 	return txn.writeSet
 }
 
-func (txn *Transaction) GetReadSet() occ.Set {
+func (txn *OccTransaction) GetReadSet() occ.Set {
 	return txn.readSet
 }
 
-var _ occ.Transaction = (*Transaction)(nil)
+var _ occ.OccTransaction = (*OccTransaction)(nil)
 
-func (txn *Transaction) Read() error {
+func (txn *OccTransaction) Read() error {
 	for t := range txn.GetReadSet().All() {
-		if err := txn.ctx.Load(t); err != nil {
+		data, err := txn.targetAdp.Read(t)
+		if err != nil {
 			return err
 		}
+		txn.ctx.Set(t, data)
 	}
 	return nil
 }
 
-func (txn *Transaction) ReadTarget(target string) (any, error) {
-	return txn.ctx.ReadTarget(target)
+func (txn *OccTransaction) ReadTarget(target string) (any, error) {
+	return txn.targetAdp.Read(target)
 }
 
-func (txn *Transaction) Write(target string, value any) error {
-	return txn.ctx.Write(target, value)
+func (txn *OccTransaction) Write(target string, value any) error {
+	return txn.targetAdp.Write(target, value)
 }
 
-func (txn *Transaction) Execute() error { // to be overwrite
+func (txn *OccTransaction) Execute() error { // to be overwrite
 	for _, cmd := range txn.cmds {
 		if err := cmd.Execute(txn.ctx); err != nil {
 			return err
@@ -127,27 +125,27 @@ func (txn *Transaction) Execute() error { // to be overwrite
 	return nil
 }
 
-func (txn *Transaction) GetOutcomes() ([]any, error) {
+func (txn *OccTransaction) GetOutcomes() ([]any, error) {
 	return txn.ctx.GetOutcomes()
 }
 
-func (txn *Transaction) GetOutcome(target string) any {
+func (txn *OccTransaction) GetOutcome(target string) any {
 	return txn.ctx.GetOutcome(target)
 }
 
-func (txn *Transaction) Serialize(value any) ([]byte, error) {
-	return txn.ctx.Serialize(value)
+func (txn *OccTransaction) Serialize(value any) ([]byte, error) {
+	return txn.targetAdp.Serialize(value)
 }
 
-func (txn *Transaction) UnSerialize(data []byte) (any, error) {
-	return txn.ctx.UnSerialize(data)
+func (txn *OccTransaction) UnSerialize(data []byte) (any, error) {
+	return txn.targetAdp.UnSerialize(data)
 }
 
-func GetTransactionFactory(ctx Context) func(string) (occ.Transaction, error) {
-	return func(txnId string) (occ.Transaction, error) {
-		return &Transaction{
-			id:  txnId,
-			ctx: ctx,
-		}, nil
-	}
-}
+// func GetOccTransactionFactory(ctx Context) func(string) (occ.OccTransaction, error) {
+// 	return func(txnId string) (occ.OccTransaction, error) {
+// 		return &OccTransaction{
+// 			id:  txnId,
+// 			ctx: ctx,
+// 		}, nil
+// 	}
+// }
