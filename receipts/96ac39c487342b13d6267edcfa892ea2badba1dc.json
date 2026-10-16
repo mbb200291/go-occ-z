@@ -1,0 +1,197 @@
+{
+  "body": {
+    "schema": "pohw-editing-receipt/v3",
+    "claim": "self-attested-editor-behavior",
+    "targetCommit": "96ac39c487342b13d6267edcfa892ea2badba1dc",
+    "issuedAt": "2026-10-16T16:41:51.819Z",
+    "keyId": "5e8b6a3e3cfa8d0927b8e7a7966488cfef12f6e5c4fe9affeb99f7120c19e46f",
+    "code": {
+      "rootHash": "eea9e65e201ef9f571990d888b6c0a4cd68f6803cddfd0dd2b5486a151040e34",
+      "files": 14,
+      "algorithm": "pohw-code-files-sha256-v1"
+    },
+    "metrics": {
+      "units": 27902,
+      "monitoredUnits": 0,
+      "scorePercent": null,
+      "coveragePercent": 0,
+      "algorithm": "rule-based-v0.2"
+    },
+    "provenance": {
+      "version": 1,
+      "files": [
+        {
+          "path": ".github/workflows/pohw-verify.yml",
+          "spans": [
+            [
+              2,
+              null,
+              "baseline"
+            ],
+            [
+              7727,
+              null,
+              "external"
+            ],
+            [
+              54,
+              null,
+              "baseline"
+            ]
+          ]
+        },
+        {
+          "path": "JsonlOcc/context.go",
+          "spans": [
+            [
+              6877,
+              null,
+              "external"
+            ]
+          ]
+        },
+        {
+          "path": "README.md",
+          "spans": [
+            [
+              404,
+              null,
+              "external"
+            ],
+            [
+              442,
+              null,
+              "baseline"
+            ]
+          ]
+        },
+        {
+          "path": "cmd/main.go",
+          "spans": [
+            [
+              31,
+              null,
+              "baseline"
+            ]
+          ]
+        },
+        {
+          "path": "occ/engine.go",
+          "spans": [
+            [
+              1140,
+              null,
+              "baseline"
+            ]
+          ]
+        },
+        {
+          "path": "occ/internal/bufferpool.go",
+          "spans": [
+            [
+              41,
+              null,
+              "baseline"
+            ]
+          ]
+        },
+        {
+          "path": "occ/internal/context.go",
+          "spans": [
+            [
+              650,
+              null,
+              "baseline"
+            ]
+          ]
+        },
+        {
+          "path": "occ/internal/core/commit.go",
+          "spans": [
+            [
+              7289,
+              null,
+              "baseline"
+            ]
+          ]
+        },
+        {
+          "path": "occ/internal/core/execute.go",
+          "spans": [
+            [
+              110,
+              null,
+              "baseline"
+            ],
+            [
+              2335,
+              null,
+              "external"
+            ],
+            [
+              524,
+              null,
+              "baseline"
+            ]
+          ]
+        },
+        {
+          "path": "occ/internal/core/validate.go",
+          "spans": [
+            [
+              1666,
+              null,
+              "external"
+            ]
+          ]
+        },
+        {
+          "path": "occ/internal/ordered_map.go",
+          "spans": [
+            [
+              933,
+              null,
+              "external"
+            ]
+          ]
+        },
+        {
+          "path": "occ/internal/set.go",
+          "spans": [
+            [
+              689,
+              null,
+              "external"
+            ]
+          ]
+        },
+        {
+          "path": "occ/internal/transaction.go",
+          "spans": [
+            [
+              3150,
+              null,
+              "baseline"
+            ]
+          ]
+        },
+        {
+          "path": "occ/internal/trasaction_container.go",
+          "spans": [
+            [
+              1157,
+              null,
+              "external"
+            ]
+          ]
+        }
+      ]
+    },
+    "session": {
+      "startedAt": "2026-10-14T14:51:50.232Z",
+      "endedAt": "2026-10-15T13:26:57.526Z",
+      "auditTip": "e50895244e935fe4dc210a3a1c3bf1233600fd4172c4a7963254a89c59f158b1"
+    }
+  },
+  "signature": "q+eL1kkbITbyWklHD5G0IWkokkCwbZSFhnpUj+H2H+VGWNqZyenF2yo58zZVRtSN8kE1Q2+JcJS4ufdz/qX+CQ=="
+}
