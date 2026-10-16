@@ -1,0 +1,257 @@
+{
+  "body": {
+    "schema": "pohw-editing-receipt/v3",
+    "claim": "self-attested-editor-behavior",
+    "targetCommit": "b0138000d2fb11fe8a749aaa1b014a9397466180",
+    "issuedAt": "2026-10-16T16:12:55.183Z",
+    "keyId": "5e8b6a3e3cfa8d0927b8e7a7966488cfef12f6e5c4fe9affeb99f7120c19e46f",
+    "code": {
+      "rootHash": "936732e169423dc12df91acfd4ccbb73d411f842e8f5e71e7ea172cd0057e686",
+      "files": 19,
+      "algorithm": "pohw-code-files-sha256-v1"
+    },
+    "metrics": {
+      "units": 48248,
+      "monitoredUnits": 0,
+      "scorePercent": null,
+      "coveragePercent": 0,
+      "algorithm": "rule-based-v0.2"
+    },
+    "provenance": {
+      "version": 1,
+      "files": [
+        {
+          "path": ".github/workflows/pohw-verify.yml",
+          "spans": [
+            [
+              2,
+              null,
+              "baseline"
+            ],
+            [
+              7727,
+              null,
+              "external"
+            ],
+            [
+              54,
+              null,
+              "baseline"
+            ]
+          ]
+        },
+        {
+          "path": "JsonlOcc/README.md",
+          "spans": [
+            [
+              6116,
+              null,
+              "external"
+            ]
+          ]
+        },
+        {
+          "path": "JsonlOcc/command.go",
+          "spans": [
+            [
+              2947,
+              null,
+              "external"
+            ]
+          ]
+        },
+        {
+          "path": "JsonlOcc/context.go",
+          "spans": [
+            [
+              10084,
+              null,
+              "external"
+            ]
+          ]
+        },
+        {
+          "path": "JsonlOcc/jsonl_test.go",
+          "spans": [
+            [
+              8428,
+              null,
+              "external"
+            ]
+          ]
+        },
+        {
+          "path": "JsonlOcc/main.go",
+          "spans": [
+            [
+              1728,
+              null,
+              "external"
+            ]
+          ]
+        },
+        {
+          "path": "JsonlOcc/path.go",
+          "spans": [
+            [
+              2107,
+              null,
+              "external"
+            ]
+          ]
+        },
+        {
+          "path": "README.md",
+          "spans": [
+            [
+              404,
+              null,
+              "external"
+            ],
+            [
+              442,
+              null,
+              "baseline"
+            ]
+          ]
+        },
+        {
+          "path": "cmd/main.go",
+          "spans": [
+            [
+              31,
+              null,
+              "baseline"
+            ]
+          ]
+        },
+        {
+          "path": "occ/engine.go",
+          "spans": [
+            [
+              1156,
+              null,
+              "baseline"
+            ]
+          ]
+        },
+        {
+          "path": "occ/internal/command_base.go",
+          "spans": [
+            [
+              423,
+              null,
+              "external"
+            ]
+          ]
+        },
+        {
+          "path": "occ/internal/context_base.go",
+          "spans": [
+            [
+              309,
+              null,
+              "baseline"
+            ]
+          ]
+        },
+        {
+          "path": "occ/internal/core/commit.go",
+          "spans": [
+            [
+              2881,
+              null,
+              "baseline"
+            ],
+            [
+              193,
+              null,
+              "external"
+            ],
+            [
+              4175,
+              null,
+              "baseline"
+            ]
+          ]
+        },
+        {
+          "path": "occ/internal/core/execute.go",
+          "spans": [
+            [
+              3079,
+              null,
+              "baseline"
+            ]
+          ]
+        },
+        {
+          "path": "occ/internal/core/validate.go",
+          "spans": [
+            [
+              1666,
+              null,
+              "external"
+            ]
+          ]
+        },
+        {
+          "path": "occ/internal/ordered_map.go",
+          "spans": [
+            [
+              933,
+              null,
+              "external"
+            ]
+          ]
+        },
+        {
+          "path": "occ/internal/set.go",
+          "spans": [
+            [
+              689,
+              null,
+              "external"
+            ]
+          ]
+        },
+        {
+          "path": "occ/internal/transaction.go",
+          "spans": [
+            [
+              145,
+              null,
+              "baseline"
+            ],
+            [
+              2973,
+              null,
+              "external"
+            ],
+            [
+              55,
+              null,
+              "baseline"
+            ]
+          ]
+        },
+        {
+          "path": "occ/internal/trasaction_container.go",
+          "spans": [
+            [
+              1157,
+              null,
+              "external"
+            ]
+          ]
+        }
+      ]
+    },
+    "session": {
+      "startedAt": "2026-10-14T14:51:50.232Z",
+      "endedAt": "2026-10-15T13:26:57.526Z",
+      "auditTip": "c4d09899e3d959dd6160bdb1667150c05c3da52783cadba077948ddb19640be8"
+    }
+  },
+  "signature": "mpvCSzmi+MxO5HdnfdSsKEWxNW4i4/4naBDRrJYlkG8y4jRJwD2ea1uojaAKAkr56vfGY7iXSjFHKjVaA5CSDw=="
+}
