@@ -1,4 +1,4 @@
-package occ
+package core
 
 import (
 	"bufio"
@@ -14,14 +14,14 @@ import (
 
 // Commit writes the transaction and returns failures without rolling back.
 // The caller controls rollback and handles rollback failures.
-func Commit(txn Transaction) error {
+func Commit(txn Transaction, adpt TargetAdapter) error {
 	for target := range txn.GetWriteSet().All() {
 		// backup target
-		ori, err := txn.ReadTarget(target)
+		ori, err := adpt.Read(target)
 		if err != nil {
 			return err
 		}
-		oriB, err := txn.Serialize(ori)
+		oriB, err := adpt.Serialize(ori)
 		if err != nil {
 			return err
 		}
@@ -35,7 +35,7 @@ func Commit(txn Transaction) error {
 		}
 
 		// write target
-		if err := txn.Write(target, txn.GetOutcome(target)); err != nil {
+		if err := adpt.Write(target, txn.GetOutcome(target)); err != nil {
 			return err
 		}
 	}
