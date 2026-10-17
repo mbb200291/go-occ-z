@@ -1,4 +1,4 @@
-package occ
+package core
 
 func validatePair(prevTxn, curTxn Transaction) bool {
 	// When meet following critera, consider as not conflict (is valid) between prevTxn and curTxn
