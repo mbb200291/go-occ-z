@@ -15,18 +15,21 @@ func (octx *OccContext) GetOutcomes() ([]any, error) {
 	return octx.outcomes, octx.err
 }
 
-func (octx *OccContext) GetOutcome(target string) any {
+func (octx *OccContext) GetData(target string) any {
 	return octx.dataRepo[target]
 }
 
-// Append input to outcome list. Each command should only setoutcome once.
-func (octx *OccContext) SetOutcome(target string, outcome any) {
-	octx.dataRepo[target] = outcome
-	octx.outcomes = append(octx.outcomes, outcome)
+func (octx *OccContext) SetData(target string, data any) {
+	octx.dataRepo[target] = data
 }
 
 func (octx *OccContext) SetErr(target string, err error) {
 	octx.err = err
+}
+
+// Append input to outcome list. Each command should only setoutcome once.
+func (octx *OccContext) AppendOutcome(outcome any) {
+	octx.outcomes = append(octx.outcomes, outcome)
 }
 
 func NewOccContext() *OccContext {

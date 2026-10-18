@@ -67,7 +67,7 @@ func Process(txn Transaction, ctx Context, adpt TargetAdapter, cmds []Command, p
 		if wErr := Withdraw(txn.GetID(), adpt); wErr != nil {
 			// encounter rollback fail, throw panic.
 			// System should recovery by run tidyup
-			panic(errors.Join(ErrCommit, fmt.Errorf("%w: %w", ErrRollback, wErr)))
+			panic(errors.Join(ErrCommit, fmt.Errorf("%w: %w", ErrRollback, wErr), err))
 		}
 		// the dirty interval includes rollback
 		txn.SetWriteTime(NextTimestamp())

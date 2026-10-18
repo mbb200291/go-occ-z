@@ -5,7 +5,7 @@ func read(ctx Context, adpt TargetAdapter, target string) error {
 	if err != nil {
 		return err
 	}
-	ctx.SetOutcome(target, data)
+	ctx.SetData(target, data)
 	return nil
 }
 
@@ -22,6 +22,6 @@ func Read(ctx Context, adpt TargetAdapter, targets Set) error {
 // should implement this.
 type Context interface {
 	GetOutcomes() ([]any, error)
-	GetOutcome(string) any
-	SetOutcome(string, any)
+	GetData(string) any
+	SetData(string, any)
 }
