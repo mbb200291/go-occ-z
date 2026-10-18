@@ -1,23 +1,14 @@
 package occ
 
-type BufferPoolManager interface {
-	Get(string) any
-	Set(string, any)
-}
+// type BufferPoolManager interface {
+// 	Get(string) any
+// 	Set(string, any)
+// }
 
 type OccContext struct {
 	outcomes []any
 	err      error
-	bpm      BufferPoolManager
-}
-
-func (octx *OccContext) Write(string) error {
-	return nil
-}
-
-func (octx *OccContext) Load(string) error {
-	// Have to implement
-	return nil
+	dataRepo map[string]any
 }
 
 func (octx *OccContext) GetOutcomes() ([]any, error) {
@@ -25,14 +16,22 @@ func (octx *OccContext) GetOutcomes() ([]any, error) {
 }
 
 func (octx *OccContext) GetOutcome(target string) any {
-	// TODO
-	return octx.outcomes[0]
+	return octx.dataRepo[target]
 }
 
-func (octx *OccContext) SetOutcome(target string, result any) {
-	return // todo
+// Append input to outcome list. Each command should only setoutcome once.
+func (octx *OccContext) SetOutcome(target string, outcome any) {
+	octx.dataRepo[target] = outcome
+	octx.outcomes = append(octx.outcomes, outcome)
+}
+
+func (octx *OccContext) SetErr(target string, err error) {
+	octx.err = err
 }
 
 func NewOccContext() *OccContext {
-	return &OccContext{} // TODO
+	return &OccContext{
+		outcomes: []any{},
+		dataRepo: map[string]any{},
+	}
 }
