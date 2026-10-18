@@ -1,142 +1,17 @@
-package occ
+package core
 
-import (
-	"errors"
-	"fmt"
-	"iter"
-	"math"
-	"sync"
-	"sync/atomic"
-)
-
-var timestamp atomic.Uint64
-
-var ErrConflict = errors.New("read-write lock")
-
-// var maxtimestamp atomic.Uint64
-var muR sync.RWMutex
-var muV sync.RWMutex
-
-func NextTimestamp() uint64 {
-	return timestamp.Add(1)
-}
-
-func init() {
-	// maxtimestamp.Store(math.MaxUint64)
-	muR = sync.RWMutex{}
-	muV = sync.RWMutex{}
-
-}
-
-// func NextMaxTimestamp() uint64 {
-// 	return maxtimestamp.Add(^uint64(0))
-// }
-
-type Set interface {
-	IsDisjoint(Set) bool
-	Contains(string) bool
-	All() iter.Seq[string]
-}
-
-type TimeStamp comparable
-
-type Transaction interface {
-	GetReadTime() uint64     // readtime will init as inf
-	GetValidateTime() uint64 // validatetime will init as inf
-	GetWriteTime() uint64    // writetime will init as inf
-
-	SetReadTime(uint64)
-	SetValidateTime(uint64)
-	SetWriteTime(uint64)
-
-	GetWriteSet() Set
-	GetReadSet() Set
-
-	Read() error // aka. fetch
-	ReadTarget(string) (any, error)
-	Write(string, any) error // write one target
-	Execute() error
-
-	GetOutcomes() ([]any, error)
-	GetOutcome(string) any
-
-	Serialize(any) ([]byte, error)
-	UnSerialize([]byte) (any, error)
-	GetID() string
-}
-
-type TransactionContainer interface {
-	Add(Transaction)
-	Remove(Transaction)
-	GetMin() (Transaction, bool)
-
-	IterTill(uint64, func(uint64, Transaction) bool)
-}
-
-// prevTxn should use validate time as key
-// ongoingTxn should use read time as key
-func Execute(txn Transaction, prevTxns, ongoingTxns TransactionContainer) error {
-	// ensure write time is max
-	txn.SetWriteTime(uint64(math.MaxInt64))
-
-	// read phase -- load read set to private zone
-	muR.Lock() // [+] lock
-	txn.SetReadTime(NextTimestamp())
-
-	// register txn to ongoing T and all T
-	ongoingTxns.Add(txn) // ordered by readtime
-	muR.Unlock()         // [-] unlock
-
-	// unregister txn from ongoing T after txn complete
-	defer ongoingTxns.Remove(txn)
-
-	err := txn.Read()
-	if err != nil {
-		return fmt.Errorf("read phase failed: %w", err)
-	}
-
-	// execute transaction optimicaly
-	err = txn.Execute()
-	if err != nil {
-		return fmt.Errorf("execution phase failed: %w", err)
-	}
-
-	// set validate
-	muV.Lock() // [+] lock
-	txn.SetValidateTime(NextTimestamp())
-
-	// add txn to prevTxn
-	prevTxns.Add(txn)
-	muV.Unlock() // [-] unlock
-
-	// prepare purge write time till to
-	minTxnReadTime := uint64(math.MaxInt64)
-	if minTxn, exist := ongoingTxns.GetMin(); exist {
-		minTxnReadTime = minTxn.GetReadTime()
-	}
-
-	// run validate
-	if outcome := Validate(txn, prevTxns, minTxnReadTime); !outcome {
-		prevTxns.Remove(txn)
-		return ErrConflict
-	}
-
-	// write phase -- finalize changes to production zone
-	err = Commit(txn)
-
-	if err != nil {
-		commitErr := fmt.Errorf("commit fail: %w", err)
-		if rollbackErr := Withdraw(txn); rollbackErr != nil {
-			// encounter rollback fail, throw panic.
-			// System should recovery by run tidyup
-			panic(errors.Join(commitErr, fmt.Errorf("rollback fail: %w", rollbackErr)))
+func Execute(ctx Context, cmds []Command) error {
+	for _, cmd := range cmds {
+		if err := cmd.Execute(ctx); err != nil {
+			return err
 		}
-		// the dirty interval includes rollback
-		txn.SetWriteTime(NextTimestamp())
-		return commitErr
 	}
-
-	txn.SetWriteTime(NextTimestamp())
-
 	return nil
+}
+
+type Command interface {
+	IsReadOnly() bool
+	IsWriteOnly() bool
+	Execute(Context) error
+	GetTargets() []string
 }
