@@ -24,4 +24,5 @@ type Context interface {
 	GetOutcomes() ([]any, error)
 	GetData(string) any
 	SetData(string, any)
+	AppendOutcome(any)
 }

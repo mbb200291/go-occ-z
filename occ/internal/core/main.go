@@ -56,7 +56,7 @@ func Process(txn Transaction, ctx Context, adpt TargetAdapter, cmds []Command, p
 	// run validate
 	if outcome := Validate(txn, prevTxns, minTxnReadTime); !outcome {
 		prevTxns.Remove(txn)
-		return errors.New("read-write lock")
+		return ErrConflict
 	}
 
 	// write phase -- finalize changes to production zone

@@ -86,5 +86,5 @@ func (txn *OccTransaction) GetOutcomes() ([]any, error) {
 }
 
 func (txn *OccTransaction) GetOutcome(target string) any {
-	return txn.ctx.GetOutcome(target)
+	return txn.ctx.GetData(target)
 }

@@ -12,6 +12,10 @@ type Transaction = imp.OccTransaction
 type Set = core.Set
 
 var ErrConflict = core.ErrConflict
+var ErrCommit = core.ErrCommit
+var ErrExecute = core.ErrExecute
+var ErrRead = core.ErrRead
+var ErrRollback = core.ErrRollback
 
 type Engine struct {
 	prevTxn    core.TransactionContainer
@@ -30,11 +34,12 @@ func NewEngine(adpt core.TargetAdapter) *Engine {
 }
 
 func (eg *Engine) Run(cmds []Command) ([]any, error) {
-	txn := imp.NewOccTransaction(cmds, imp.NewOccContext())
-	if err := core.Process(txn, eg.ctx, eg.adpt, cmds, eg.prevTxn, eg.ongoingTxn); err != nil {
+	ctx := imp.NewOccContext()
+	txn := imp.NewOccTransaction(cmds, ctx)
+	if err := core.Process(txn, ctx, eg.adpt, cmds, eg.prevTxn, eg.ongoingTxn); err != nil {
 		return nil, err
 	}
-	return eg.ctx.GetOutcomes()
+	return txn.GetOutcomes()
 }
 
 func (eg *Engine) Recovery() error {
