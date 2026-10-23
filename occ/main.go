@@ -10,6 +10,7 @@ type Context = core.Context
 type Command = core.Command
 type Transaction = imp.OccTransaction
 type Set = core.Set
+type TargetAdapter = core.TargetAdapter
 
 var ErrConflict = core.ErrConflict
 var ErrCommit = core.ErrCommit
@@ -17,23 +18,24 @@ var ErrExecute = core.ErrExecute
 var ErrRead = core.ErrRead
 var ErrRollback = core.ErrRollback
 
-type Engine struct {
+type Manager struct {
 	prevTxn    core.TransactionContainer
 	ongoingTxn core.TransactionContainer
 	ctx        Context
 	adpt       core.TargetAdapter
 }
 
-func NewEngine(adpt core.TargetAdapter) *Engine {
-	eg := Engine{
+func NewManager(adpt core.TargetAdapter) *Manager {
+	manager := Manager{
 		prevTxn:    imp.NewTransactionContainer(imp.NewSkipMap(), func(txn core.Transaction) uint64 { return txn.GetValidateTime() }),
 		ongoingTxn: imp.NewTransactionContainer(imp.NewSkipMap(), func(txn core.Transaction) uint64 { return txn.GetReadTime() }),
 		adpt:       adpt,
 	}
-	return &eg
+	manager.recovery()
+	return &manager
 }
 
-func (eg *Engine) Run(cmds []Command) ([]any, error) {
+func (eg *Manager) Run(cmds []Command) ([]any, error) {
 	ctx := imp.NewOccContext()
 	txn := imp.NewOccTransaction(cmds, ctx)
 	if err := core.Process(txn, ctx, eg.adpt, cmds, eg.prevTxn, eg.ongoingTxn); err != nil {
@@ -42,6 +44,6 @@ func (eg *Engine) Run(cmds []Command) ([]any, error) {
 	return txn.GetOutcomes()
 }
 
-func (eg *Engine) Recovery() error {
+func (eg *Manager) recovery() error {
 	return core.Recovery(eg.adpt)
 }
