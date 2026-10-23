@@ -135,7 +135,7 @@ type TargetAdapter interface {
 // to read unfinished txn in txn logs and carry on undone txn rollback works
 // will only revert change (won't carry out commit)
 func Recovery(adpt TargetAdapter) error {
-	entries, err := os.ReadDir(".commit")
+	entries, err := os.ReadDir(".occ/journal")
 	if os.IsNotExist(err) {
 		return nil
 	}
@@ -167,7 +167,7 @@ func Recovery(adpt TargetAdapter) error {
 }
 
 func discardBackup(txnId, target string) error {
-	if err := os.Remove(filepath.Join(".backup", encodeTarget(txnId), encodeTarget(target))); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(filepath.Join(".occ/backup", encodeTarget(txnId), encodeTarget(target))); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	return nil
@@ -189,7 +189,7 @@ func decodeTarget(encoded string) (string, error) {
 }
 
 func saveBackup(txnId, target string, data []byte) error {
-	path := filepath.Join(".backup", encodeTarget(txnId), encodeTarget(target))
+	path := filepath.Join(".occ/backup", encodeTarget(txnId), encodeTarget(target))
 
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
@@ -218,15 +218,15 @@ func saveBackup(txnId, target string, data []byte) error {
 }
 
 func loadBackup(txnId, target string) ([]byte, error) {
-	path := filepath.Join(".backup", encodeTarget(txnId), encodeTarget(target))
+	path := filepath.Join(".occ/backup", encodeTarget(txnId), encodeTarget(target))
 	return os.ReadFile(path)
 }
 
 func loadTargetsToRevert(txnId string) (map[string]bool, bool, error) {
-	path := filepath.Join(".commit", encodeTarget(txnId))
+	path := filepath.Join(".occ/journal", encodeTarget(txnId))
 	toRevert := make(map[string]bool)
 
-	file, err := os.Open(path)
+	file, err := os.OpenFile(path, os.O_RDWR, 0)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return toRevert, false, nil
@@ -289,11 +289,11 @@ func loadTargetsToRevert(txnId string) (map[string]bool, bool, error) {
 }
 
 func appendLog(txnId, action, target string) error {
-	if err := os.MkdirAll(".commit", 0755); err != nil {
+	if err := os.MkdirAll(".occ/journal", 0755); err != nil {
 		return err
 	}
 
-	path := filepath.Join(".commit", encodeTarget(txnId))
+	path := filepath.Join(".occ/journal", encodeTarget(txnId))
 
 	file, err := os.OpenFile(
 		path,
@@ -317,7 +317,7 @@ func appendLog(txnId, action, target string) error {
 }
 
 func cleanupLogs(txnId string) error {
-	path := filepath.Join(".commit", filepath.Join(encodeTarget(txnId)))
+	path := filepath.Join(".occ/journal", filepath.Join(encodeTarget(txnId)))
 	if err := os.RemoveAll(path); err != nil { // won't return error when file already removed (not exist)
 		return err
 	}
@@ -325,7 +325,7 @@ func cleanupLogs(txnId string) error {
 }
 
 func cleanupBackups(txnId string) error {
-	if err := os.RemoveAll(filepath.Join(".backup", encodeTarget(txnId))); err != nil {
+	if err := os.RemoveAll(filepath.Join(".occ/backup", encodeTarget(txnId))); err != nil {
 		return err
 	}
 	return nil
