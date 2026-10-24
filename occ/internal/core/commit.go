@@ -133,6 +133,9 @@ func Recovery(adpt TargetAdapter) ([]string, error) {
 	var successTxnIds []string
 	var errs []error
 	for _, entry := range entries {
+		if entry.Name() == ".occ.lock" {
+			continue
+		}
 		txnId := entry.Name()
 		if !entry.IsDir() {
 			errs = append(errs, fmt.Errorf("invalid transaction directory %q", entry.Name()))

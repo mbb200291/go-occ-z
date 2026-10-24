@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/gofrs/flock"
+
 	imp "github.com/mbb200291/go-occ-z/occ/internal"
 	"github.com/mbb200291/go-occ-z/occ/internal/core"
 )
@@ -27,6 +29,7 @@ type Manager interface {
 }
 
 type occManager struct {
+	lock         *flock.Flock
 	retryOptions RetryOptions
 	prevTxn      core.TransactionContainer
 	ongoingTxn   core.TransactionContainer
@@ -46,15 +49,21 @@ func NewManager(adpt core.TargetAdapter, configs ...Config) (*occManager, error)
 	if err != nil {
 		return nil, err
 	}
+	lock, err := acquireLock()
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrIniManager, err)
+	}
 	manager := occManager{
+		lock:         lock,
 		retryOptions: options,
 		prevTxn:      imp.NewTransactionContainer(imp.NewSkipMap(), func(txn core.Transaction) uint64 { return txn.GetValidateTime() }),
 		ongoingTxn:   imp.NewTransactionContainer(imp.NewSkipMap(), func(txn core.Transaction) uint64 { return txn.GetReadTime() }),
 		adpt:         adpt,
 	}
 	if err := manager.recovery(); err != nil {
-		return nil, fmt.Errorf("%w: recovery: %w", ErrIniManager, err)
+		return nil, errors.Join(fmt.Errorf("%w: recovery: %w", ErrIniManager, err), lock.Close())
 	}
+	retainLock(lock)
 	return &manager, nil
 }
 
