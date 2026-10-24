@@ -4,16 +4,16 @@
 
 | Field | Verified value |
 | --- | --- |
-| Human editing evidence score | **74.81%** |
-| Monitored coverage | **1.39%** |
+| Human editing evidence score | **70.86%** |
+| Monitored coverage | **2.99%** |
 | Receipt verification | Signed receipt matches source commit |
 | Assurance | Self-attested editing evidence |
 
 ## Sources
 
-- [Source commit](https://github.com/mbb200291/go-occ-z/commit/e8bdf8183c75c24c3428c378f7ea01c8f6894a80)
-- [Signed receipt](https://github.com/mbb200291/go-occ-z/blob/pohw-evidence/receipts/e8bdf8183c75c24c3428c378f7ea01c8f6894a80.json)
+- [Source commit](https://github.com/mbb200291/go-occ-z/commit/6ad64bd527f44dc691d48ff07a5844078ecb8fec)
+- [Signed receipt](https://github.com/mbb200291/go-occ-z/blob/pohw-evidence/receipts/6ad64bd527f44dc691d48ff07a5844078ecb8fec.json)
 - [Verification workflow](https://github.com/mbb200291/go-occ-z/actions/workflows/pohw-verify.yml)
-- Source code SHA-256 manifest root: c1fbc939ad8b02908b61076fb304bcdb72174551c9256b9c45ef72819ab0f6a9
+- Source code SHA-256 manifest root: 1d12ff33d1491c357a8a7369777f687b071944a72db89c74749ded3d89820a44
 
 The editing score is an uncalibrated behavioral heuristic, not a probability of human authorship.
