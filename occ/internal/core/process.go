@@ -117,7 +117,7 @@ type Transaction interface {
 	GetWriteSet() Set
 	GetReadSet() Set
 
-	GetOutcomes() ([]any, error)
+	GetOutcomes() []any
 	GetOutcome(string) any
 }
 

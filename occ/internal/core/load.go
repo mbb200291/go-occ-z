@@ -18,10 +18,10 @@ func Read(ctx Context, adpt TargetAdapter, targets Set) error {
 	return nil
 }
 
-// data should only access / store on context object, should not directly access original source.
+// data should only access and store on context object, should not directly access original source.
 // should implement this.
 type Context interface {
-	GetOutcomes() ([]any, error)
+	GetOutcomes() []any
 	GetData(string) any
 	SetData(string, any)
 	AppendOutcome(any)
