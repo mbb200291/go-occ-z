@@ -64,7 +64,13 @@ func Process(txn Transaction, ctx Context, adpt TargetAdapter, cmds []Command, p
 
 	if err != nil {
 		err = fmt.Errorf("%w : %w", ErrCommit, err)
-		if wErr := Withdraw(txn.GetID(), adpt); wErr != nil {
+		committed, wErr := Withdraw(txn.GetID(), adpt)
+		if committed {
+			// commit had been success
+			txn.SetWriteTime(NextTimestamp())
+			return nil
+		}
+		if wErr != nil {
 			// encounter rollback fail, throw panic.
 			// System should recovery by run tidyup
 			panic(errors.Join(ErrCommit, fmt.Errorf("%w: %w", ErrRollback, wErr), err))

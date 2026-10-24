@@ -8,8 +8,6 @@ import (
 
 type Context = core.Context
 type Command = core.Command
-type Transaction = imp.OccTransaction
-type Set = core.Set
 type TargetAdapter = core.TargetAdapter
 
 var ErrConflict = core.ErrConflict
@@ -17,6 +15,8 @@ var ErrCommit = core.ErrCommit
 var ErrExecute = core.ErrExecute
 var ErrRead = core.ErrRead
 var ErrRollback = core.ErrRollback
+var ErrIniManager = errors.New("occ: create occ manager failed")
+var ErrIniTxn = errors.New("occ: init transaction failed")
 
 type Manager struct {
 	prevTxn    core.TransactionContainer

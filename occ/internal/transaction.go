@@ -2,6 +2,7 @@ package occ
 
 import (
 	"crypto/rand"
+	"errors"
 	"math"
 	"sync/atomic"
 
@@ -23,9 +24,12 @@ type OccTransaction struct {
 	targetAdp core.TargetAdapter
 }
 
-func NewOccTransaction(cmds []core.Command, ctx core.Context) *OccTransaction {
+func NewOccTransaction(cmds []core.Command, ctx core.Context) (*OccTransaction, error) {
+	if len(cmds) == 0 {
+		return nil, errors.New("zero cmmand provided")
+	}
 	txn := &OccTransaction{
-		id:       rand.Text(),
+		id:       rand.Text(), // string safe as a filename
 		cmds:     cmds,
 		ctx:      ctx,
 		readSet:  NewSet(),
@@ -36,6 +40,9 @@ func NewOccTransaction(cmds []core.Command, ctx core.Context) *OccTransaction {
 	txn.writeTime.Store(math.MaxUint64)
 
 	for _, c := range txn.cmds {
+		if c == nil {
+			return nil, errors.New("nil command provided")
+		}
 		if c.IsReadOnly() {
 			txn.readSet.Add(c.GetTargets())
 		} else if c.IsWriteOnly() {
@@ -45,7 +52,7 @@ func NewOccTransaction(cmds []core.Command, ctx core.Context) *OccTransaction {
 			txn.writeSet.Add(c.GetTargets())
 		}
 	}
-	return txn
+	return txn, nil
 }
 
 func (txn *OccTransaction) GetID() string { return txn.id }
@@ -81,7 +88,7 @@ func (txn *OccTransaction) GetWriteSet() core.Set {
 func (txn *OccTransaction) GetReadSet() core.Set {
 	return txn.readSet
 }
-func (txn *OccTransaction) GetOutcomes() ([]any, error) {
+func (txn *OccTransaction) GetOutcomes() []any {
 	return txn.ctx.GetOutcomes()
 }
 
