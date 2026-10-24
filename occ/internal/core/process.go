@@ -5,9 +5,41 @@ import (
 	"fmt"
 	"iter"
 	"math"
+	"math/rand/v2"
 	"sync"
 	"sync/atomic"
+	"time"
 )
+
+// RetryProcess retries only validation conflicts. Each attempt must create a
+// fresh transaction and context before calling Process.
+func RetryProcess(options RetryOptions, process func() error) error {
+	delay := options.BaseDelay
+	for attempt := 0; ; attempt++ {
+		err := process()
+		// Wrapped command/storage errors must not trigger a replay.
+		if err != ErrConflict || attempt >= options.MaxRetries {
+			return err
+		}
+		time.Sleep(retryWait(delay, options.Jitter))
+		delay += min(delay, options.MaxDelay-delay)
+	}
+}
+
+type RetryOptions struct {
+	MaxRetries int // Additional attempts after the initial attempt.
+	BaseDelay  time.Duration
+	MaxDelay   time.Duration
+	Jitter     bool // Randomize waits between 50% and 100% of the current delay.
+}
+
+// Keep exponential growth independent of the randomized wait.
+func retryWait(delay time.Duration, jitter bool) time.Duration {
+	if !jitter {
+		return delay
+	}
+	return delay - time.Duration(rand.Int64N(int64(delay/2)+1))
+}
 
 // prevTxn should use validate time as key
 // ongoingTxn should use read time as key
