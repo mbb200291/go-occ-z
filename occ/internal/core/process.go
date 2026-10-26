@@ -64,7 +64,7 @@ func Process(txn Transaction, ctx Context, adpt TargetAdapter, cmds []Command, p
 		return err
 	}
 
-	// execute transaction optimicaly
+	// execute transaction
 	err = Execute(ctx, cmds)
 	if err != nil {
 		err = fmt.Errorf("%w : %w", ErrExecute, err)

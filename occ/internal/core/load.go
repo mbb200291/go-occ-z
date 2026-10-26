@@ -18,8 +18,8 @@ func Read(ctx Context, adpt TargetAdapter, targets Set) error {
 	return nil
 }
 
-// data should only access and store on context object, should not directly access original source.
-// should implement this.
+// Data should only access and store on context object, should not directly access original source.
+// Should be implemented by client.
 type Context interface {
 	GetOutcomes() []any
 	GetData(string) any
