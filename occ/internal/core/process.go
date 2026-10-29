@@ -58,14 +58,14 @@ func Process(txn Transaction, ctx Context, adpt TargetAdapter, cmds []Command, p
 	// unregister txn from ongoing T after txn complete
 	defer ongoingTxns.Remove(txn)
 
-	err := Read(ctx, adpt, txn.GetReadSet())
-	if err != nil {
-		err = fmt.Errorf("%w : %w", ErrRead, err)
-		return err
-	}
+	// err := Read(ctx, adpt, txn.GetReadSet())
+	// if err != nil {
+	// 	err = fmt.Errorf("%w : %w", ErrRead, err)
+	// 	return err
+	// }
 
 	// execute transaction
-	err = Execute(ctx, cmds)
+	err := Execute(ctx, cmds)
 	if err != nil {
 		err = fmt.Errorf("%w : %w", ErrExecute, err)
 		return err
@@ -156,7 +156,7 @@ type Transaction interface {
 	GetReadSet() Set
 
 	GetOutcomes() []any
-	GetOutcome(string) any
+	GetWriteData(string) any
 }
 
 type TransactionContainer interface {

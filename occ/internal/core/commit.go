@@ -18,7 +18,7 @@ import (
 func Commit(txn Transaction, adpt TargetAdapter) error {
 	for target := range txn.GetWriteSet().All() {
 		// backup target
-		ori, err := adpt.Read(target)
+		ori, err := adpt.Read(target) // TODO: handle new file create and remove
 		if err != nil {
 			return err
 		}
@@ -36,7 +36,7 @@ func Commit(txn Transaction, adpt TargetAdapter) error {
 		}
 
 		// write target
-		if err := adpt.Write(target, txn.GetOutcome(target)); err != nil {
+		if err := adpt.Write(target, txn.GetWriteData(target)); err != nil {
 			return err
 		}
 	}

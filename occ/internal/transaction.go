@@ -17,8 +17,8 @@ type OccTransaction struct {
 	writeTime    atomic.Uint64
 	validateTime atomic.Uint64
 
-	readSet  Set
-	writeSet Set
+	// readSet  Set
+	// writeSet Set
 
 	ctx       core.Context
 	targetAdp core.TargetAdapter
@@ -29,29 +29,29 @@ func NewOccTransaction(cmds []core.Command, ctx core.Context) (*OccTransaction, 
 		return nil, errors.New("zero cmmand provided")
 	}
 	txn := &OccTransaction{
-		id:       rand.Text(), // string safe as a filename
-		cmds:     cmds,
-		ctx:      ctx,
-		readSet:  NewSet(),
-		writeSet: NewSet(),
+		id:   rand.Text(), // string safe as a filename
+		cmds: cmds,
+		ctx:  ctx,
+		// readSet:  NewSet(),
+		// writeSet: NewSet(),
 	}
 	txn.readTime.Store(math.MaxUint64)
 	txn.validateTime.Store(math.MaxUint64)
 	txn.writeTime.Store(math.MaxUint64)
 
-	for _, c := range txn.cmds {
-		if c == nil {
-			return nil, errors.New("nil command provided")
-		}
-		if c.IsReadOnly() {
-			txn.readSet.Add(c.GetTargets())
-		} else if c.IsWriteOnly() {
-			txn.writeSet.Add(c.GetTargets())
-		} else {
-			txn.readSet.Add(c.GetTargets())
-			txn.writeSet.Add(c.GetTargets())
-		}
-	}
+	// for _, c := range txn.cmds {
+	// 	if c == nil {
+	// 		return nil, errors.New("nil command provided")
+	// 	}
+	// 	if c.IsReadOnly() {
+	// 		txn.readSet.Add(c.GetTargets())
+	// 	} else if c.IsWriteOnly() {
+	// 		txn.writeSet.Add(c.GetTargets())
+	// 	} else {
+	// 		txn.readSet.Add(c.GetTargets())
+	// 		txn.writeSet.Add(c.GetTargets())
+	// 	}
+	// }
 	return txn, nil
 }
 
@@ -82,16 +82,17 @@ func (txn *OccTransaction) SetValidateTime(t uint64) {
 }
 
 func (txn *OccTransaction) GetWriteSet() core.Set {
-	return txn.writeSet
+	return txn.ctx.GetWriteSet()
 }
 
 func (txn *OccTransaction) GetReadSet() core.Set {
-	return txn.readSet
+	return txn.ctx.GetReadSet()
 }
 func (txn *OccTransaction) GetOutcomes() []any {
 	return txn.ctx.GetOutcomes()
 }
 
-func (txn *OccTransaction) GetOutcome(target string) any {
-	return txn.ctx.GetData(target)
+func (txn *OccTransaction) GetWriteData(target string) any {
+	data, _ := txn.ctx.GetData(target)
+	return data
 }

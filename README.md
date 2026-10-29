@@ -71,9 +71,9 @@ type Increment struct {
     Target string
 }
 
-func (Increment) IsReadOnly() bool     { return false }
-func (Increment) IsWriteOnly() bool    { return false }
-func (c Increment) GetTargets() []string { return []string{c.Target} }
+// func (Increment) IsReadOnly() bool     { return false }
+// func (Increment) IsWriteOnly() bool    { return false }
+// func (c Increment) GetTargets() []string { return []string{c.Target} }
 
 func (c Increment) Execute(ctx occ.Context) error {
     value, ok := ctx.GetData(c.Target).(int64)
@@ -124,3 +124,10 @@ Jitter chooses a wait between 50% and 100% of each exponential delay.
 - Only one manager can own a `.occ` directory. Another gets `ErrDirectoryInUse`. The lock lasts until process exit.
 - Do not delete journals or the lock file, or change the working directory while using the manager.
 - Different working directories have separate locks. occ-z Won't protect data from been modified by other applications.
+
+## Not Supported Yet
+
+1. Creating or deleting targets (only updates to existing data are supported).
+2. Buffer poll to handle extreme large memory loading
+3. High-priority channel for starved transaction
+4. Manager ceate or delete object scenario

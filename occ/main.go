@@ -70,7 +70,7 @@ func NewManager(adpt core.TargetAdapter, configs ...Config) (*occManager, error)
 func (mgr *occManager) Run(cmds []Command) ([]any, error) {
 	var outcomes []any
 	err := core.RetryProcess(mgr.retryOptions, func() error {
-		ctx := imp.NewOccContext()
+		ctx := imp.NewOccContext(mgr.adpt)
 		txn, err := imp.NewOccTransaction(cmds, ctx)
 		if err != nil {
 			return fmt.Errorf("%w: %w", ErrIniTxn, err)
