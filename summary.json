@@ -1,9 +1,9 @@
 {
   "verification": "signature-and-content-valid",
   "assurance": "self-attested",
-  "humanScore": 41.22,
-  "monitoredCoverage": 4.07,
-  "sourceCommit": "d143c6882f20bf0c2c18a011d62bb5a65b702d49",
-  "sourceCodeHash": "8e8209ff321adb7426b2b3304e7a50c2f1ea4e4c817ef2ab3009259b05b3a6bf",
-  "issuedAt": "2026-10-26T13:11:21.687Z"
+  "humanScore": 39.09,
+  "monitoredCoverage": 3.7,
+  "sourceCommit": "65d5e0785e0b237ec3dd804bee0311ba2c8b549b",
+  "sourceCodeHash": "84043212fa8c105a1ef8f5f01554e22b916d483b8d3094f2ff6b384fb6142a5f",
+  "issuedAt": "2026-10-29T15:40:48.870Z"
 }
