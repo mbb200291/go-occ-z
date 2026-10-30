@@ -4,6 +4,7 @@ package occ
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/gofrs/flock"
@@ -26,9 +27,11 @@ var ErrIniTxn = errors.New("occ: init transaction failed")
 
 type Manager interface {
 	Run([]Command) ([]any, error)
+	ExcRun([]Command) ([]any, error)
 }
 
 type occManager struct {
+	runMu        sync.RWMutex
 	lock         *flock.Flock
 	retryOptions RetryOptions
 	prevTxn      core.TransactionContainer
@@ -68,20 +71,45 @@ func NewManager(adpt core.TargetAdapter, configs ...Config) (*occManager, error)
 }
 
 func (mgr *occManager) Run(cmds []Command) ([]any, error) {
+	outcomes, err := func() ([]any, error) {
+		mgr.runMu.RLock()
+		defer mgr.runMu.RUnlock()
+		return mgr.run(cmds)
+	}()
+	// retry execution under exclusive lock to rescue starving transaction
+	if err == ErrConflict {
+		return mgr.ExcRun(cmds)
+	}
+	return outcomes, err
+}
+
+// ExcRun waits for active Run calls and excludes other transactions.
+func (mgr *occManager) ExcRun(cmds []Command) ([]any, error) {
+	mgr.runMu.Lock()
+	defer mgr.runMu.Unlock()
+	return mgr.runOnce(cmds)
+}
+
+func (mgr *occManager) run(cmds []Command) ([]any, error) {
 	var outcomes []any
 	err := core.RetryProcess(mgr.retryOptions, func() error {
-		ctx := imp.NewOccContext(mgr.adpt)
-		txn, err := imp.NewOccTransaction(cmds, ctx)
-		if err != nil {
-			return fmt.Errorf("%w: %w", ErrIniTxn, err)
-		}
-		if err := core.Process(txn, ctx, mgr.adpt, cmds, mgr.prevTxn, mgr.ongoingTxn); err != nil {
-			return err
-		}
-		outcomes = txn.GetOutcomes()
-		return nil
+		var err error
+		outcomes, err = mgr.runOnce(cmds)
+		return err
 	})
 	return outcomes, err
+}
+
+func (mgr *occManager) runOnce(cmds []Command) ([]any, error) {
+	ctx := imp.NewOccContext(mgr.adpt)
+	txn, err := imp.NewOccTransaction(cmds, ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrIniTxn, err)
+	}
+	if err := core.Process(txn, ctx, mgr.adpt, cmds, mgr.prevTxn, mgr.ongoingTxn); err != nil {
+		return nil, err
+	}
+	return txn.GetOutcomes(), nil
 }
 
 func (mgr *occManager) recovery() error {
