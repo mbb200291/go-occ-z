@@ -92,24 +92,26 @@ func Process(txn Transaction, ctx Context, adpt TargetAdapter, cmds []Command, p
 	}
 
 	// write phase -- finalize changes to production zone
-	err = Commit(txn, adpt)
+	if txn.GetWriteSet().Size() > 0 {
+		err = Commit(txn, adpt)
 
-	if err != nil {
-		err = fmt.Errorf("%w : %w", ErrCommit, err)
-		committed, wErr := Withdraw(txn.GetID(), adpt)
-		if committed {
-			// commit had been success
+		if err != nil {
+			err = fmt.Errorf("%w : %w", ErrCommit, err)
+			committed, wErr := Withdraw(txn.GetID(), adpt)
+			if committed {
+				// commit had been success
+				txn.SetWriteTime(NextTimestamp())
+				return nil
+			}
+			if wErr != nil {
+				// encounter rollback fail, throw panic.
+				// System should recovery by run tidyup
+				panic(errors.Join(ErrCommit, fmt.Errorf("%w: %w", ErrRollback, wErr), err))
+			}
+			// the dirty interval includes rollback
 			txn.SetWriteTime(NextTimestamp())
-			return nil
+			return err
 		}
-		if wErr != nil {
-			// encounter rollback fail, throw panic.
-			// System should recovery by run tidyup
-			panic(errors.Join(ErrCommit, fmt.Errorf("%w: %w", ErrRollback, wErr), err))
-		}
-		// the dirty interval includes rollback
-		txn.SetWriteTime(NextTimestamp())
-		return err
 	}
 
 	txn.SetWriteTime(NextTimestamp())
@@ -137,6 +139,7 @@ type Set interface {
 	IsDisjoint(Set) bool
 	Contains(string) bool
 	All() iter.Seq[string]
+	Size() int
 }
 
 type TimeStamp comparable

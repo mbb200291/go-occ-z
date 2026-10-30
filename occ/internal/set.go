@@ -46,4 +46,8 @@ func (s Set) All() iter.Seq[string] {
 	}
 }
 
+func (s Set) Size() int {
+	return len(s)
+}
+
 var _ occ.Set = Set(nil)

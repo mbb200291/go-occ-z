@@ -22,7 +22,7 @@ func Validate(curTxn Transaction, prevTxns TransactionContainer, minReadTimeOgTx
 		curTxn.GetValidateTime(),
 		func(prevKey uint64, prevTxn Transaction) bool {
 			if prevKey == curTxn.GetValidateTime() {
-				return true
+				return true // self
 			}
 			outcome = outcome && validatePair(prevTxn, curTxn)
 			if !outcome {
