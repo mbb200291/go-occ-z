@@ -9,27 +9,53 @@ Based on [CMU Lecture #18](https://15445.courses.cs.cmu.edu/fall2024/schedule.ht
 
 Under development. Not ready for production.
 
-## Usage
+## Quick start
 
-Implement `occ.TargetAdapter` for storage and `occ.Command` for operations.
-One `Run` executes the supplied commands as one transaction.
+Implement a `TargetAdapter` for your storage, then share one manager across goroutines.
+Each `Run` executes its commands as one transaction. Commands read and write through
+Context and return their result directly.
+
+This example expects an existing `counter` target containing an `int64`:
 
 ```go
-import "github.com/mbb200291/go-occ-z/occ"
+import (
+    "fmt"
 
-manager, err := occ.NewManager(adapter)
-if err != nil {
-    return err
+    "github.com/mbb200291/go-occ-z/occ"
+)
+
+type Increment struct{ Target string }
+
+func (c Increment) Execute(ctx occ.Context) (any, error) {
+    data, err := ctx.GetData(c.Target)
+    if err != nil {
+        return nil, err
+    }
+    value, ok := data.(int64)
+    if !ok || value == int64(1<<63-1) {
+        return nil, fmt.Errorf("target %q: invalid counter or overflow", c.Target)
+    }
+    ctx.SetData(c.Target, value+1)
+    return value + 1, nil
 }
-outcomes, err := manager.Run(commands) // commands is []occ.Command
-if err != nil {
-    return err
+
+func incrementCounter(adapter occ.TargetAdapter) error {
+    manager, err := occ.NewManager(adapter)
+    if err != nil {
+        return err
+    }
+    outcomes, err := manager.Run([]occ.Command{Increment{Target: "counter"}})
+    if err != nil {
+        return err
+    }
+    fmt.Println(outcomes[0])
+    return nil
 }
-// Use outcomes.
 ```
 
-Share the manager across goroutines. Validation conflicts will retried internaly by occ. Retry parameters can be tuned by `occ.RetryOptions`.
-Command execution errors will interrupt execution process and returned without retrying.
+Create the manager once and reuse it. Targets can be chosen during execution;
+`GetData` and `SetData` track the reads and writes. Results follow command order.
+Return `nil, nil` when a command has no result.
 
 ## Implement TargetAdapter
 
@@ -42,66 +68,21 @@ type TargetAdapter interface {
 }
 ```
 
-- Choose stable target keys, such as record IDs or line numbers. Commands touching the same data must use the same key.
-- `Read` returns the current value. Copy mutable data, including nested maps and slices, so commands cannot change shared storage through a reference.
-- `Write` function will finalize data, such as save data to file. It will be called when commit or rollback.
-- `Serialize` encodes data to a bytes. It will be called during backup data before finalize. `UnSerialize` must restore a value that `Write` accepts, including after a process restart.
-- Methods may run concurrently. Protect shared adapter state and preserve unrelated targets when writing. Complete the required storage flush before returning success.
+- Use the same target key for the same data. `Read` must return independent data,
+  including copies of nested maps and slices.
+- Methods may run concurrently. Writes must preserve unrelated targets and finish
+  the required storage flush before returning success.
+- `Write` handles both commit and rollback. Serialization must preserve the original
+  value for restoration after a restart; the byte format is up to the adapter.
 
-OCC stores the returned backup bytes; it does not require JSON.
+## Options
 
-Add a compile-time check to your implementation:
+Validation conflicts retry automatically, then fall back to one exclusive attempt.
+Command and storage errors are returned without retrying. Use `manager.ExcRun(commands)`
+to wait for active calls and execute exclusively from the start.
 
-```go
-var _ occ.TargetAdapter = (*MyAdapter)(nil)
-```
-
-## Implement Command
-
-Declare all targets before execution. Read-only commands return `true` from
-`IsReadOnly`; write-only commands return `true` from `IsWriteOnly`. For a
-read-modify-write operation, both return `false`. Do not set both to `true`.
-Write-only targets are not loaded, so set their values before commit.
-
-This example assumes the adapter returns `int64` values. It needs `fmt` and
-`github.com/mbb200291/go-occ-z/occ` imports.
-
-```go
-type Increment struct {
-    Target string
-}
-
-// func (Increment) IsReadOnly() bool     { return false }
-// func (Increment) IsWriteOnly() bool    { return false }
-// func (c Increment) GetTargets() []string { return []string{c.Target} }
-
-func (c Increment) Execute(ctx occ.Context) error {
-    value, ok := ctx.GetData(c.Target).(int64)
-    if !ok {
-        return fmt.Errorf("target %q: expected int64", c.Target)
-    }
-    if value == int64(1<<63-1) {
-        return fmt.Errorf("target %q: counter overflow", c.Target)
-    }
-    value++
-    ctx.SetData(c.Target, value)
-    ctx.AppendOutcome(value)
-    return nil
-}
-
-var _ occ.Command = Increment{}
-```
-
-Pass it to `manager.Run([]occ.Command{Increment{Target: "counter"}})`.
-Only use Context for transaction data. Do not access undeclared targets, retain
-the context after execution, or mutate command inputs while Run is active.
-Commands may execute more than once: avoid direct file writes, messages, or
-other side effects that rollback cannot undo.
-
-## Retry settings
-
-Defaults: 32 retries, a 1ms initial delay, a 100ms maximum delay, jitter off.
-Pass one optional Config to change them (import `time`):
+Defaults: 32 retries, 1ms initial delay, 100ms maximum delay, jitter off.
+To override them, pass an optional config (import `time`):
 
 ```go
 manager, err := occ.NewManager(adapter, occ.Config{
@@ -114,20 +95,18 @@ manager, err := occ.NewManager(adapter, occ.Config{
 })
 ```
 
-A nil Retry uses defaults. Otherwise, supply all three numeric fields.
-`MaxRetries: 0` disables retries; delays must satisfy `0 < BaseDelay <= MaxDelay`.
-Jitter chooses a wait between 50% and 100% of each exponential delay.
+Provide all numeric fields when overriding. `MaxRetries: 0` goes straight to the
+exclusive attempt after the first conflict. Delays require `0 < BaseDelay <= MaxDelay`.
 
-## Storage and lifetime
+## Notes
 
-- Initialization recovers pending transactions from `.occ` in the working directory. Keep that directory associated with the same storage across restarts.
-- Only one manager can own a `.occ` directory. Another gets `ErrDirectoryInUse`. The lock lasts until process exit.
-- Do not delete journals or the lock file, or change the working directory while using the manager.
-- Different working directories have separate locks. occ-z Won't protect data from been modified by other applications.
-
-## Not Supported Yet
-
-1. Creating or deleting targets (only updates to existing data are supported).
-2. Buffer poll to handle extreme large memory loading
-3. High-priority channel for starved transaction
-4. Manager ceate or delete object scenario
+- Only existing targets can be updated. Creating or deleting files or records is not supported.
+- Commands may run more than once. Use Context for transaction data, propagate read
+  errors, and avoid external side effects. Do not retain the context, modify its
+  dependency sets, or call the same manager recursively from a command.
+- Startup recovers pending transactions from `.occ` in the working directory.
+  Keep it tied to the same storage. Do not delete its files or change the working
+  directory while the manager is in use.
+- One manager owns each `.occ` directory until process exit; another gets
+  `ErrDirectoryInUse`. Separate directories have separate locks, so prevent other
+  managers or applications from independently modifying the same data.
