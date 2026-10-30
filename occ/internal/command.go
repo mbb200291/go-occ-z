@@ -20,7 +20,7 @@ type CommandBase struct {
 // 	return cmdb.targets
 // }
 
-func (cmdb *CommandBase) Execute(ctx core.Context) error {
+func (cmdb *CommandBase) Execute(ctx core.Context) ([]any, error) {
 	// should write computation to private zone
-	return nil
+	return nil, nil
 }

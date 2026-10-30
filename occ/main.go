@@ -103,13 +103,14 @@ func (mgr *occManager) run(cmds []Command) ([]any, error) {
 func (mgr *occManager) runOnce(cmds []Command) ([]any, error) {
 	ctx := imp.NewOccContext(mgr.adpt)
 	txn, err := imp.NewOccTransaction(cmds, ctx)
+	var outcomes []any
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrIniTxn, err)
 	}
-	if err := core.Process(txn, ctx, mgr.adpt, cmds, mgr.prevTxn, mgr.ongoingTxn); err != nil {
+	if outcomes, err = core.Process(txn, ctx, mgr.adpt, cmds, mgr.prevTxn, mgr.ongoingTxn); err != nil {
 		return nil, err
 	}
-	return txn.GetOutcomes(), nil
+	return outcomes, nil
 }
 
 func (mgr *occManager) recovery() error {

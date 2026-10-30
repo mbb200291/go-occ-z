@@ -1,28 +1,27 @@
 package core
 
-func Execute(ctx Context, cmds []Command) error {
+func Execute(ctx Context, cmds []Command) ([]any, error) {
+	var outcomes []any
+	var outcome any
+	var err error
 	for _, cmd := range cmds {
-		if err := cmd.Execute(ctx); err != nil {
-			return err
+		if outcome, err = cmd.Execute(ctx); err != nil {
+			return nil, err
 		}
+		outcomes = append(outcomes, outcome)
 	}
-	return nil
+	return outcomes, nil
 }
 
 // Should implemented by client.
 type Command interface {
-	// IsReadOnly() bool
-	// IsWriteOnly() bool
-	Execute(Context) error
-	// GetTargets() []string
+	Execute(Context) (any, error)
 }
 
 // Data should only access and store on context object, should not directly access original source.
 type Context interface {
-	GetOutcomes() []any
 	GetData(string) (any, error)
 	SetData(string, any)
-	AppendOutcome(any)
 
 	GetWriteSet() Set
 	GetReadSet() Set

@@ -43,7 +43,7 @@ func retryWait(delay time.Duration, jitter bool) time.Duration {
 
 // prevTxn should use validate time as key
 // ongoingTxn should use read time as key
-func Process(txn Transaction, ctx Context, adpt TargetAdapter, cmds []Command, prevTxns, ongoingTxns TransactionContainer) error {
+func Process(txn Transaction, ctx Context, adpt TargetAdapter, cmds []Command, prevTxns, ongoingTxns TransactionContainer) ([]any, error) {
 	// ensure write time is max
 	txn.SetWriteTime(uint64(math.MaxInt64))
 
@@ -58,17 +58,11 @@ func Process(txn Transaction, ctx Context, adpt TargetAdapter, cmds []Command, p
 	// unregister txn from ongoing T after txn complete
 	defer ongoingTxns.Remove(txn)
 
-	// err := Read(ctx, adpt, txn.GetReadSet())
-	// if err != nil {
-	// 	err = fmt.Errorf("%w : %w", ErrRead, err)
-	// 	return err
-	// }
-
 	// execute transaction
-	err := Execute(ctx, cmds)
+	outcomes, err := Execute(ctx, cmds)
 	if err != nil {
 		err = fmt.Errorf("%w : %w", ErrExecute, err)
-		return err
+		return nil, err
 	}
 
 	// set validate
@@ -88,7 +82,7 @@ func Process(txn Transaction, ctx Context, adpt TargetAdapter, cmds []Command, p
 	// run validate
 	if outcome := Validate(txn, prevTxns, minTxnReadTime); !outcome {
 		prevTxns.Remove(txn)
-		return ErrConflict
+		return nil, ErrConflict
 	}
 
 	// write phase -- finalize changes to production zone
@@ -101,7 +95,7 @@ func Process(txn Transaction, ctx Context, adpt TargetAdapter, cmds []Command, p
 			if committed {
 				// commit had been success
 				txn.SetWriteTime(NextTimestamp())
-				return nil
+				return outcomes, nil
 			}
 			if wErr != nil {
 				// encounter rollback fail, throw panic.
@@ -110,13 +104,13 @@ func Process(txn Transaction, ctx Context, adpt TargetAdapter, cmds []Command, p
 			}
 			// the dirty interval includes rollback
 			txn.SetWriteTime(NextTimestamp())
-			return err
+			return nil, err
 		}
 	}
 
 	txn.SetWriteTime(NextTimestamp())
 
-	return nil
+	return outcomes, nil
 }
 
 var timestamp atomic.Uint64
@@ -158,7 +152,6 @@ type Transaction interface {
 	GetWriteSet() Set
 	GetReadSet() Set
 
-	GetOutcomes() []any
 	GetWriteData(string) any
 }
 

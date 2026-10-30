@@ -88,9 +88,6 @@ func (txn *OccTransaction) GetWriteSet() core.Set {
 func (txn *OccTransaction) GetReadSet() core.Set {
 	return txn.ctx.GetReadSet()
 }
-func (txn *OccTransaction) GetOutcomes() []any {
-	return txn.ctx.GetOutcomes()
-}
 
 func (txn *OccTransaction) GetWriteData(target string) any {
 	data, _ := txn.ctx.GetData(target)
