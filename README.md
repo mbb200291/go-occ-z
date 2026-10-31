@@ -171,4 +171,17 @@ Tests cover validation, conflict retries, exclusive fallback, concurrent updates
 rollback, interrupted recovery, and directory ownership. Benchmark results are
 not a substitute for these correctness tests.
 
+## Benchmark Testing
+
+![File-backed OCC speedup across read/write ratios and target coverage](https://raw.githubusercontent.com/mbb200291/go-occ-z-usecase/main/matrix-demo/benchmark-results/2026-10-31-delay100ms-workers20/file.svg)
+
+An 8 × 8 matrix with one file per target, 20 requests, and 20 parallel workers.
+Each command attempt includes a simulated 100ms wait. X is the read/write request
+ratio; Y is the fraction of targets accessed per request. Each cell shows median
+sequential time divided by median parallel time across five runs; above 1 means
+faster. Both modes use the same OCC Manager, with one worker for the baseline.
+
+Note that this experminet introduce simulated waiting, it not a guarantee of application speedup.
+[Results, raw data, and configuration](https://github.com/mbb200291/go-occ-z-usecase/tree/main/matrix-demo/benchmark-results/2026-10-31-delay100ms-workers20).
+
 [Release notes](CHANGELOG.md) · [MIT license](LICENSE)
