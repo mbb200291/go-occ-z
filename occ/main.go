@@ -1,4 +1,3 @@
-// Package occ provides an optimistic concurrency control engine.
 package occ
 
 import (
@@ -13,20 +12,53 @@ import (
 	"github.com/mbb200291/go-occ-z/occ/internal/core"
 )
 
+// Context is private to one transaction attempt. Use it only during Execute.
+// GetData caches successful reads; propagate read errors instead of using them
+// to infer absence. SetData stages replacements for existing targets.
+// Do not modify dependency sets or retain the context after Execute.
 type Context = core.Context
+
+// Command runs inside a transaction and may be executed again after a conflict.
+// Keep side effects in Context; return results instead of publishing them early.
+// Commands shared across Run calls must be safe for concurrent execution.
 type Command = core.Command
+
+// TargetAdapter provides concurrent storage access and backup serialization.
+// Read must return independent data, including nested mutable values. Write
+// must preserve unrelated targets and also support restoring a saved value.
+// Copy mutable Write inputs if retaining them, rather than sharing outcome data.
+// Serialization must round-trip values across process restarts.
 type TargetAdapter = core.TargetAdapter
 
+// ErrConflict marks validation conflicts. Only a bare internal conflict is retried.
 var ErrConflict = core.ErrConflict
+
+// ErrCommit reports a commit failure after a successful rollback.
 var ErrCommit = core.ErrCommit
+
+// ErrExecute wraps a command error; the transaction is not committed.
 var ErrExecute = core.ErrExecute
+
+// ErrRead wraps a storage read error returned through Context.
 var ErrRead = core.ErrRead
+
+// ErrRollback identifies rollback failure in a panic value. Stop using storage
+// and recover it on restart; do not continue after recovering this panic.
 var ErrRollback = core.ErrRollback
+
+// ErrIniManager wraps configuration, lock, or startup recovery errors.
 var ErrIniManager = errors.New("occ: create occ manager failed")
+
+// ErrIniTxn reports an empty command list or a nil command.
 var ErrIniTxn = errors.New("occ: init transaction failed")
 
+// Manager coordinates transactions against one adapter and state directory.
+// Obtain one with NewManager and share it across goroutines.
 type Manager interface {
+	// Run returns successful outcomes in command order. Failed attempts are discarded.
+	// Conflicts retry, then fall back to an exclusive attempt.
 	Run([]Command) ([]any, error)
+	// ExcRun waits for active Run calls and executes one attempt exclusively.
 	ExcRun([]Command) ([]any, error)
 }
 
@@ -39,10 +71,12 @@ type occManager struct {
 	adpt         core.TargetAdapter
 }
 
-// NewManager requires a non-nil adapter
-// Must not pass typed-nil adapter
-// Omitted settings use defaults
-func NewManager(adpt core.TargetAdapter, configs ...Config) (*occManager, error) {
+// NewManager acquires the working directory's .occ lock, then recovers pending
+// transactions before accepting work. The lock is retained until process exit.
+// Keep the working directory and its storage association unchanged.
+// Pass a non-nil adapter (including no typed-nil pointer) and at most one Config.
+// Omitted settings use defaults. Initialization failure releases the lock.
+func NewManager(adpt TargetAdapter, configs ...Config) (*occManager, error) {
 	if adpt == nil {
 		err := fmt.Errorf("%w : nil adaptor", ErrIniManager)
 		return nil, err
@@ -118,10 +152,14 @@ func (mgr *occManager) recovery() error {
 	return err
 }
 
+// RetryOptions controls conflict retries. MaxRetries excludes the first attempt.
+// BaseDelay doubles up to MaxDelay; Jitter selects 50–100% of each delay.
+// With no Config: 32 retries, 1ms base, 100ms maximum, jitter disabled.
 type RetryOptions = core.RetryOptions
 
 // Config contains optional manager settings
 type Config struct {
+	// Retry replaces all retry defaults when non-nil. Numeric fields must be valid.
 	Retry *RetryOptions
 }
 

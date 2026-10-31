@@ -28,6 +28,12 @@ func NewOccTransaction(cmds []core.Command, ctx core.Context) (*OccTransaction, 
 	if len(cmds) == 0 {
 		return nil, errors.New("zero cmmand provided")
 	}
+	for _, cmd := range cmds {
+		if cmd == nil {
+			return nil, errors.New("nil command provided")
+		}
+	}
+
 	txn := &OccTransaction{
 		id:   rand.Text(), // string safe as a filename
 		cmds: cmds,

@@ -9,6 +9,7 @@ import (
 	"github.com/gofrs/flock"
 )
 
+// ErrDirectoryInUse means another manager or process owns this .occ directory.
 var ErrDirectoryInUse = errors.New("occ: state directory is already in use")
 
 // Keep successful locks reachable until process exit, even if a Manager is

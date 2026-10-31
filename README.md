@@ -4,10 +4,16 @@
 
 # go-occ-z
 
+[![Unit tests](https://github.com/mbb200291/go-occ-z/actions/workflows/test.yml/badge.svg?branch=dev)](https://github.com/mbb200291/go-occ-z/actions/workflows/test.yml)
+
 Optimistic concurrency control for Go, using backward validation.
 Based on [CMU Lecture #18](https://15445.courses.cs.cmu.edu/fall2024/schedule.html).
 
-Under development. Not ready for production.
+Experimental; not ready for production. Requires Go 1.25 or newer.
+
+```sh
+go get github.com/mbb200291/go-occ-z/occ
+```
 
 ## Quick start
 
@@ -72,6 +78,8 @@ type TargetAdapter interface {
   including copies of nested maps and slices.
 - Methods may run concurrently. Writes must preserve unrelated targets and finish
   the required storage flush before returning success.
+- If `Write` retains mutable input, copy it so later changes to an outcome cannot
+  mutate storage outside OCC.
 - `Write` handles both commit and rollback. Serialization must preserve the original
   value for restoration after a restart; the byte format is up to the adapter.
 
@@ -110,3 +118,37 @@ exclusive attempt after the first conflict. Delays require `0 < BaseDelay <= Max
 - One manager owns each `.occ` directory until process exit; another gets
   `ErrDirectoryInUse`. Separate directories have separate locks, so prevent other
   managers or applications from independently modifying the same data.
+
+## Errors and recovery
+
+Use `errors.Is` for public errors and the underlying adapter/command error.
+`ErrIniManager` covers configuration, directory locking, and startup recovery;
+`ErrIniTxn` covers empty command lists and nil commands. Do not pass typed-nil
+adapters or commands.
+
+Command errors return `ErrExecute` without commit. Read errors propagated from
+`Context.GetData` additionally carry `ErrRead`. Commit failures trigger rollback and normally return `ErrCommit`. If
+rollback finds a complete `COMMIT` record, the call instead returns success.
+Rollback failure **panics** with `ErrRollback`; stop using the storage and recover
+on restart. Do not catch this panic and continue serving transactions.
+
+Cleanup failures after commit are logged; startup retries cleanup. Successful
+transaction IDs are not a durable history. The current implementation syncs files
+but not parent directories, so it does **not** guarantee power-loss durability.
+Readers outside the manager can observe intermediate writes. Recovery requires the
+same adapter, storage, and serialization format as the original transaction.
+
+## Tests
+
+```sh
+go test -race -count=1 -timeout=5m ./...
+go vet ./...
+```
+
+The unit-test badge reports the `dev` workflow status, not test coverage. CI tests
+Go 1.25 and stable on Linux, macOS, and Windows, and uploads coverage reports.
+Tests cover validation, conflict retries, exclusive fallback, concurrent updates,
+rollback, interrupted recovery, and directory ownership. Benchmark results are
+not a substitute for these correctness tests.
+
+[Release notes](CHANGELOG.md) · [MIT license](LICENSE)
