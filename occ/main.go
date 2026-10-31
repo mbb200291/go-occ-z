@@ -58,8 +58,8 @@ type Manager interface {
 	// Run returns successful outcomes in command order. Failed attempts are discarded.
 	// Conflicts retry, then fall back to an exclusive attempt.
 	Run([]Command) ([]any, error)
-	// ExcRun waits for active Run calls and executes one attempt exclusively.
-	ExcRun([]Command) ([]any, error)
+	// RunExclusive waits for active Run calls and executes one attempt exclusively.
+	RunExclusive([]Command) ([]any, error)
 }
 
 type occManager struct {
@@ -112,13 +112,13 @@ func (mgr *occManager) Run(cmds []Command) ([]any, error) {
 	}()
 	// retry execution under exclusive lock to rescue starving transaction
 	if err == ErrConflict {
-		return mgr.ExcRun(cmds)
+		return mgr.RunExclusive(cmds)
 	}
 	return outcomes, err
 }
 
-// ExcRun waits for active Run calls and excludes other transactions.
-func (mgr *occManager) ExcRun(cmds []Command) ([]any, error) {
+// RunExclusive waits for active Run calls and excludes other transactions.
+func (mgr *occManager) RunExclusive(cmds []Command) ([]any, error) {
 	mgr.runMu.Lock()
 	defer mgr.runMu.Unlock()
 	return mgr.runOnce(cmds)

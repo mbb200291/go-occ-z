@@ -223,7 +223,7 @@ func TestExclusiveRunBlocksOtherCommands(t *testing.T) {
 	release := make(chan struct{})
 	done := make(chan error, 1)
 	go func() {
-		_, e := m.ExcRun([]Command{commandFunc(func(c Context) (any, error) { close(entered); <-release; return nil, nil })})
+		_, e := m.RunExclusive([]Command{commandFunc(func(c Context) (any, error) { close(entered); <-release; return nil, nil })})
 		done <- e
 	}()
 	<-entered

@@ -86,7 +86,7 @@ type TargetAdapter interface {
 ## Options
 
 Validation conflicts retry automatically, then fall back to one exclusive attempt.
-Command and storage errors are returned without retrying. Use `manager.ExcRun(commands)`
+Command and storage errors are returned without retrying. Use `manager.RunExclusive(commands)`
 to wait for active calls and execute exclusively from the start.
 
 Defaults: 32 retries, 1ms initial delay, 100ms maximum delay, jitter off.
