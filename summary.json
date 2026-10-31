@@ -1,0 +1,9 @@
+{
+  "verification": "signature-and-content-valid",
+  "assurance": "self-attested",
+  "humanScore": 36.87,
+  "monitoredCoverage": 2.05,
+  "sourceCommit": "f839c7860ccb981fc220aee4c5c27566f3b2cfec",
+  "sourceCodeHash": "d7d94aece9af3d8b34dae76f7fd1a7396a34913b8c3f08f4197cb35e0abcef4f",
+  "issuedAt": "2026-10-31T15:16:37.310Z"
+}
