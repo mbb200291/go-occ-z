@@ -1,0 +1,31 @@
+name: Unit tests
+on:
+  push:
+    branches: [dev, main, 'chore/release-readiness']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        go: ['1.25.0', stable]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ matrix.go }}
+      - run: go mod download
+      - run: go mod verify
+      - run: go vet ./...
+      - run: go test -race -count=1 -timeout=5m -coverpkg=./occ/... -coverprofile=coverage.out ./...
+      - run: go tool cover -func=coverage.out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.os }}-${{ matrix.go }}
+          path: coverage.out

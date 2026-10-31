@@ -1,0 +1,151 @@
+# Verifies a self-attested signed receipt for the exact source commit.
+# The evidence Git branch is separate from user code/staging.
+name: PoHW Receipt Verification
+on:
+  push:
+    branches: ["dev"]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pohw-badge-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    name: Verify evidence for source commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check pinned PoHW verifier code
+        shell: bash
+        run: |
+          echo "5ed26903744793a57c297f9ea9f90f6145a2fca89e89271343aeef491dabefe4  .pohw/proof.js" | sha256sum --check --status
+          echo "c642e2f660fe93f138111b38364d0125e4f400b22a72c1d2eb9fd6bfb4056c54  .pohw/verify.cjs" | sha256sum --check --status
+      - name: Wait for separately pushed signed evidence
+        shell: bash
+        run: |
+          for attempt in $(seq 1 30); do
+            if git fetch --no-tags origin refs/heads/pohw-evidence >/dev/null 2>&1 && \
+               git show "FETCH_HEAD:receipts/${GITHUB_SHA}.json" > "$RUNNER_TEMP/pohw-receipt.json" 2>/dev/null; then
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "PoHW evidence is missing for $GITHUB_SHA" >&2
+          exit 1
+      - name: Verify signature, commit binding and source tree
+        run: node .pohw/verify.cjs . "$RUNNER_TEMP/pohw-receipt.json" "$RUNNER_TEMP/pohw-summary.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pohw-verified-summary
+          path: ${{ runner.temp }}/pohw-summary.json
+          if-no-files-found: error
+  publish:
+    name: Publish badge or hide invalid result
+    if: ${{ always() && github.event_name == 'push' && github.ref_name == github.event.repository.default_branch }}
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download verified metrics
+        if: ${{ needs.verify.result == 'success' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: pohw-verified-summary
+          path: ${{ runner.temp }}/pohw-verified
+      - name: Create badge output
+        env:
+          VERIFY_RESULT: ${{ needs.verify.result }}
+          VERIFIED_FILE: ${{ runner.temp }}/pohw-verified/pohw-summary.json
+          BADGE_OUTPUT: ${{ runner.temp }}/pohw-badge-output
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs'), path = require('node:path');
+          const out = process.env.BADGE_OUTPUT, source = process.env.VERIFIED_FILE;
+          const repo = process.env.GITHUB_REPOSITORY, commit = process.env.GITHUB_SHA;
+          if (!/^[\w.-]+\/[\w.-]+$/.test(repo) || !/^[a-f0-9]{40}$/.test(commit)) throw Error('Invalid repository/commit');
+          fs.mkdirSync(out, {recursive:true});
+          const report = [];
+          if (process.env.VERIFY_RESULT === 'success') {
+            const v = JSON.parse(fs.readFileSync(source,'utf8'));
+            const valid = n => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 100;
+            if (v.sourceCommit !== commit || v.verification !== 'signature-and-content-valid' ||
+                !(valid(v.humanScore) || v.humanScore === 'N/A') || !valid(v.monitoredCoverage)) {
+              throw Error('Invalid verified metrics');
+            }
+            const score = v.humanScore === 'N/A' ? 'N/A' : String(v.humanScore) + '%';
+            const coverage = String(v.monitoredCoverage) + '%';
+            const makeBadge = (label, value, labelWidth, color) => {
+              const valueWidth = 64, width = labelWidth + valueWidth;
+              return [
+                '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="20" viewBox="0 0 ' + width + ' 20" role="img" aria-label="' + label + ': ' + value + '">',
+                '<title>' + label + ': ' + value + '</title>',
+                '<rect width="' + width + '" height="20" rx="3" fill="' + color + '"/>',
+                '<path d="M3 0h' + (labelWidth-3) + 'v20H3Q0 20 0 17V3Q0 0 3 0Z" fill="#555"/>',
+                '<g fill="#fff" text-anchor="middle" font-family="Verdana,DejaVu Sans,sans-serif" font-size="11">',
+                '<text x="' + (labelWidth/2) + '" y="14">' + label + '</text>',
+                '<text x="' + (labelWidth + valueWidth/2) + '" y="14">' + value + '</text>',
+                '</g></svg>', ''
+              ].join('\n');
+            };
+            fs.writeFileSync(path.join(out,'editing.svg'), makeBadge('PoHW Editing', score, 100, '#087f8c'));
+            fs.writeFileSync(path.join(out,'coverage.svg'), makeBadge('PoHW Coverage', coverage, 112, '#3178a4'));
+            fs.copyFileSync(source, path.join(out,'summary.json'));
+            const base = 'https://github.com/' + repo;
+            report.push('# PoHW Verified Editing Report', '',
+              '> This is the last successfully verified commit; check the source SHA for freshness.', '',
+              '| Field | Verified value |', '| --- | --- |',
+              '| Human editing evidence score | **' + score + '** |',
+              '| Monitored coverage | **' + coverage + '** |',
+              '| Receipt verification | Signed receipt matches source commit |',
+              '| Assurance | Self-attested editing evidence |', '',
+              '## Sources', '',
+              '- [Source commit](' + base + '/commit/' + commit + ')',
+              '- [Signed receipt](' + base + '/blob/pohw-evidence/receipts/' + commit + '.json)',
+              '- [Verification workflow](' + base + '/actions/workflows/pohw-verify.yml)',
+              '- Source code SHA-256 manifest root: ' + String(v.sourceCodeHash || 'N/A'), '',
+              'The editing score is an uncalibrated behavioral heuristic, not a probability of human authorship.', '');
+          } else {
+            // One transparent pixel keeps invalid percentage data off the README.
+            fs.rmSync(path.join(out,'summary.json'), {force:true});
+            for (const file of ['editing.svg', 'coverage.svg']) {
+              fs.writeFileSync(path.join(out,file),
+                '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" viewBox="0 0 1 1"></svg>\n');
+            }
+            report.push('# PoHW Evidence Unavailable', '',
+              'Verification failed for ' + commit + '. No human score or coverage is published.', '',
+              'See the GitHub Actions verification workflow for details.', '');
+          }
+          fs.writeFileSync(path.join(out,'REPORT.md'), report.join('\n'));
+          NODE
+      - name: Publish independent badge branch
+        env:
+          BADGE_OUTPUT: ${{ runner.temp }}/pohw-badge-output
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git fetch origin pohw-badges; then
+            git switch -C pohw-badges-generated FETCH_HEAD
+          else
+            git switch --orphan pohw-badges-generated
+            git rm -rf --ignore-unmatch . >/dev/null
+          fi
+          cp "$BADGE_OUTPUT/editing.svg" editing.svg
+          cp "$BADGE_OUTPUT/coverage.svg" coverage.svg
+          rm -f badge.svg
+          cp "$BADGE_OUTPUT/REPORT.md" REPORT.md
+          if test -f "$BADGE_OUTPUT/summary.json"; then
+            cp "$BADGE_OUTPUT/summary.json" summary.json
+          else
+            rm -f summary.json
+          fi
+          git add -A
+          if git diff --cached --quiet; then
+            echo "PoHW badge already up to date"
+            exit 0
+          fi
+          git commit -m "chore: publish PoHW verification result for $GITHUB_SHA"
+          git push origin HEAD:refs/heads/pohw-badges

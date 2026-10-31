@@ -1,0 +1,258 @@
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.RECEIPT_VERSION = void 0;
+exports.canonicalJson = canonicalJson;
+exports.codeManifest = codeManifest;
+exports.codeManifestForCommit = codeManifestForCommit;
+exports.gitCommitFile = gitCommitFile;
+exports.keyFingerprint = keyFingerprint;
+exports.createLocalKeys = createLocalKeys;
+exports.issueReceipt = issueReceipt;
+exports.verifySignedReceipt = verifySignedReceipt;
+exports.verifiedBadgeSummary = verifiedBadgeSummary;
+exports.badgeMarkdown = badgeMarkdown;
+exports.updateBadgeReadme = updateBadgeReadme;
+/** PoHW portable self-attested receipt v1. No external npm runtime dependencies. */
+const node_crypto_1 = require("node:crypto");
+const node_child_process_1 = require("node:child_process");
+const fs = __importStar(require("node:fs"));
+const path = __importStar(require("node:path"));
+exports.RECEIPT_VERSION = 'pohw-editing-receipt/v3';
+const EXCLUDED = new Set(['.git', '.pohw', 'node_modules', 'dist', 'out', 'build', 'coverage', '.venv', 'venv']);
+const EXTENSIONS = new Set(['.go', '.ts', '.tsx', '.js', '.jsx', '.py', '.rs', '.java', '.c', '.h', '.cpp', '.hpp', '.cs', '.rb', '.php', '.swift', '.kt', '.kts', '.sh', '.sql', '.vue', '.svelte', '.html', '.css', '.json', '.yaml', '.yml', '.toml', '.md', '.xml', '.proto']);
+const sha256 = (data) => (0, node_crypto_1.createHash)('sha256').update(data).digest('hex');
+/** Recursive key ordering prevents signatures depending on JSON field insertion order. */
+function canonicalJson(value) {
+    if (value === null || typeof value !== 'object')
+        return JSON.stringify(value);
+    if (Array.isArray(value))
+        return `[${value.map(canonicalJson).join(',')}]`;
+    const obj = value;
+    return `{${Object.keys(obj).sort().map(k => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`).join(',')}}`;
+}
+function eligible(relative) {
+    const normalized = relative.replace(/\\/g, '/');
+    const chunks = normalized.split('/');
+    if (chunks.some(x => EXCLUDED.has(x)) || normalized.startsWith('/') || chunks.includes('..'))
+        return false;
+    return EXTENSIONS.has(path.posix.extname(normalized).toLowerCase());
+}
+/** Include committed/indexed and not-yet-added files; require identical code contents at CI checkout. */
+function codeManifest(root) {
+    const output = (0, node_child_process_1.execFileSync)('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], {
+        cwd: root, timeout: 15_000, maxBuffer: 12 * 1024 * 1024
+    });
+    const names = [...new Set(output.toString('utf8').split('\0').filter(Boolean))].filter(eligible).sort();
+    if (names.length > 20000)
+        throw new Error('PoHW file limit exceeded (20000)');
+    const files = [];
+    for (const name of names) {
+        const absolute = path.join(root, name);
+        const stat = fs.lstatSync(absolute);
+        if (!stat.isFile())
+            throw new Error(`PoHW excludes symlinks and non-regular source files: ${name}`);
+        if (stat.size > 2 * 1024 * 1024)
+            throw new Error(`PoHW source file too large: ${name}`);
+        files.push({ path: name.replace(/\\/g, '/'), sha256: sha256(fs.readFileSync(absolute)) });
+    }
+    return { algorithm: 'pohw-code-files-sha256-v1', rootHash: sha256(canonicalJson(files)), files };
+}
+/** Read exactly the source files stored in a Git commit, never the working tree or index. */
+function codeManifestForCommit(root, commit) {
+    if (!/^[a-f0-9]{40}$/.test(commit))
+        throw new Error('Invalid Git commit SHA');
+    const objectType = (0, node_child_process_1.execFileSync)('git', ['cat-file', '-t', commit], { cwd: root, encoding: 'utf8' }).trim();
+    if (objectType !== 'commit')
+        throw new Error('PoHW target must be a Git commit');
+    const output = (0, node_child_process_1.execFileSync)('git', ['ls-tree', '-r', '-z', '--full-tree', commit], { cwd: root, maxBuffer: 16 * 1024 * 1024 });
+    const files = [];
+    for (const entry of output.toString('utf8').split('\0').filter(Boolean)) {
+        const tab = entry.indexOf('\t');
+        if (tab < 0)
+            throw new Error('Malformed Git tree');
+        const [mode, type, object] = entry.slice(0, tab).split(' ');
+        const file = entry.slice(tab + 1);
+        if (!eligible(file))
+            continue;
+        if (!['100644', '100755'].includes(mode) || type !== 'blob')
+            throw new Error(`Unsupported Git source type: ${file}`);
+        const contents = (0, node_child_process_1.execFileSync)('git', ['cat-file', 'blob', object], { cwd: root, maxBuffer: 2 * 1024 * 1024 + 1024 });
+        if (contents.length > 2 * 1024 * 1024)
+            throw new Error(`PoHW source file too large: ${file}`);
+        files.push({ path: file, sha256: sha256(contents) });
+    }
+    if (files.length > 20000)
+        throw new Error('PoHW file limit exceeded (20000)');
+    files.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+    return { algorithm: 'pohw-code-files-sha256-v1', rootHash: sha256(canonicalJson(files)), files };
+}
+/** Return UTF-8 commit content for safe, exact provenance comparison. */
+function gitCommitFile(root, commit, filename) {
+    try {
+        const contents = (0, node_child_process_1.execFileSync)('git', ['show', `${commit}:${filename}`], { cwd: root, maxBuffer: 2 * 1024 * 1024 + 1024 });
+        if (contents.includes(0) || !contents.equals(Buffer.from(contents.toString('utf8'), 'utf8')))
+            return null;
+        return contents.toString('utf8');
+    }
+    catch {
+        return null;
+    }
+}
+function keyFingerprint(publicKeyPem) {
+    const der = (0, node_crypto_1.createPublicKey)(publicKeyPem).export({ type: 'spki', format: 'der' });
+    return sha256(der);
+}
+function createLocalKeys() {
+    const keys = (0, node_crypto_1.generateKeyPairSync)('ed25519');
+    return {
+        privateKeyPem: keys.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+        publicKeyPem: keys.publicKey.export({ type: 'spki', format: 'pem' }).toString()
+    };
+}
+function issueReceipt(body, privateKeyPem) {
+    const signature = (0, node_crypto_1.sign)(null, Buffer.from(canonicalJson(body)), (0, node_crypto_1.createPrivateKey)(privateKeyPem)).toString('base64');
+    return { body, signature };
+}
+function validPercent(x) { return typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 100; }
+function verifySignedReceipt(receipt, publicKeyPem, manifest, repositoryRoot) {
+    if (!receipt || !receipt.body || typeof receipt.signature !== 'string')
+        throw new Error('Malformed PoHW receipt');
+    const body = receipt.body;
+    if (!['pohw-editing-receipt/v2', exports.RECEIPT_VERSION].includes(body.schema) || body.claim !== 'self-attested-editor-behavior')
+        throw new Error('Unsupported PoHW receipt claim/schema');
+    if (!/^[a-f0-9]{40}$/.test(body.targetCommit))
+        throw new Error('Invalid target commit in receipt');
+    if (body.keyId !== keyFingerprint(publicKeyPem))
+        throw new Error('Receipt signer differs from registered public key');
+    if (body.code.algorithm !== manifest.algorithm || body.code.rootHash !== manifest.rootHash || body.code.files !== manifest.files.length) {
+        throw new Error('Code content does not match signed receipt (rerun PoHW Publish Signed Receipt)');
+    }
+    const m = body.metrics;
+    if (!m || !['rule-based-v0.1', 'rule-based-v0.2'].includes(m.algorithm) || !Number.isSafeInteger(m.units) || !Number.isSafeInteger(m.monitoredUnits) ||
+        m.units < 0 || m.monitoredUnits < 0 || m.monitoredUnits > m.units ||
+        !validPercent(m.coveragePercent) || (m.scorePercent !== null && !validPercent(m.scorePercent)) ||
+        (m.monitoredUnits === 0 && m.scorePercent !== null) ||
+        (m.monitoredUnits > 0 && m.scorePercent === null) ||
+        Math.abs(m.coveragePercent - (m.units ? m.monitoredUnits / m.units * 100 : 0)) > 0.011) {
+        throw new Error('Receipt metrics are inconsistent');
+    }
+    if (!/^[a-f0-9]{64}$/.test(body.session?.auditTip ?? '') || !Number.isFinite(Date.parse(body.issuedAt)))
+        throw new Error('Invalid receipt metadata');
+    let ok = false;
+    try {
+        ok = (0, node_crypto_1.verify)(null, Buffer.from(canonicalJson(body)), (0, node_crypto_1.createPublicKey)(publicKeyPem), Buffer.from(receipt.signature, 'base64'));
+    }
+    catch { /* reject */ }
+    if (!ok)
+        throw new Error('Receipt signature verification failed');
+    // v2 receipts remain verifiable, but contain no inheritable span provenance.
+    if (body.schema === exports.RECEIPT_VERSION) {
+        if (!repositoryRoot || !body.provenance || body.provenance.version !== 1 ||
+            !Array.isArray(body.provenance.files) || body.provenance.files.length !== manifest.files.length) {
+            throw new Error('Signed span provenance or repository root is missing');
+        }
+        let units = 0, monitored = 0, weighted = 0, count = 0;
+        for (let i = 0; i < manifest.files.length; i++) {
+            const f = manifest.files[i], from = body.provenance.files[i];
+            if (!from || from.path !== f.path || !Array.isArray(from.spans) || from.spans.length > 200000) {
+                throw new Error('Provenance path/span layout differs from committed source');
+            }
+            const content = gitCommitFile(repositoryRoot, body.targetCommit, f.path);
+            if (content === null || sha256(Buffer.from(content)) !== f.sha256)
+                throw new Error('Committed source unavailable');
+            let offset = 0;
+            for (const span of from.spans) {
+                if (!Array.isArray(span) || span.length !== 3)
+                    throw new Error('Invalid provenance span');
+                const [length, score, origin] = span;
+                if (!Number.isSafeInteger(length) || length <= 0 || offset + length > content.length ||
+                    !(score === null || (typeof score === 'number' && Number.isFinite(score) && score >= 0 && score <= 1)) ||
+                    !['baseline', 'incremental', 'bulk', 'move', 'external'].includes(origin)) {
+                    throw new Error('Invalid signed provenance data');
+                }
+                const size = content.slice(offset, offset + length).replace(/\s/g, '').length;
+                units += size;
+                if (score !== null) {
+                    monitored += size;
+                    weighted += score * size;
+                }
+                offset += length;
+                count++;
+                if (count > 1000000)
+                    throw new Error('Provenance is too large');
+            }
+            if (offset !== content.length)
+                throw new Error('Provenance span lengths mismatch');
+        }
+        const expectedCoverage = units ? Math.round(monitored / units * 10000) / 100 : 0;
+        const expectedScore = monitored ? Math.round(weighted / monitored * 10000) / 100 : null;
+        if (units !== m.units || monitored !== m.monitoredUnits ||
+            Math.abs(expectedCoverage - m.coveragePercent) > 0.001 || expectedScore !== m.scorePercent) {
+            throw new Error('Provenance does not match the signed score/coverage');
+        }
+    }
+}
+/** This is only ever published after the signed receipt was independently checked. */
+function verifiedBadgeSummary(receipt, sourceCommit) {
+    return {
+        verification: 'signature-and-content-valid',
+        assurance: 'self-attested',
+        humanScore: receipt.body.metrics.scorePercent === null ? 'N/A' : receipt.body.metrics.scorePercent,
+        monitoredCoverage: receipt.body.metrics.coveragePercent,
+        sourceCommit,
+        sourceCodeHash: receipt.body.code.rootHash,
+        issuedAt: receipt.body.issuedAt
+    };
+}
+/** CI issues independent editing/coverage badges only when the signed receipt verifies. */
+function badgeMarkdown(owner, repo, _defaultBranch) {
+    const base = `https://raw.githubusercontent.com/${owner}/${repo}/pohw-badges`;
+    const report = `https://github.com/${owner}/${repo}/blob/pohw-badges/REPORT.md`;
+    return [
+        '<!-- pohw-badges:start -->',
+        `[![PoHW Editing Evidence Score](${base}/editing.svg)](${report}) [![PoHW Monitored Coverage](${base}/coverage.svg)](${report})`,
+        '<!-- pohw-badges:end -->'
+    ].join('\n');
+}
+function updateBadgeReadme(readme, badges) {
+    const start = '<!-- pohw-badges:start -->', end = '<!-- pohw-badges:end -->';
+    const a = readme.indexOf(start), b = readme.indexOf(end);
+    if ((a >= 0) !== (b >= 0) || (a >= 0 && b < a))
+        throw new Error('Malformed PoHW README badge markers');
+    if (a >= 0)
+        return readme.slice(0, a) + badges + readme.slice(b + end.length);
+    return `${badges}\n\n${readme}`;
+}
