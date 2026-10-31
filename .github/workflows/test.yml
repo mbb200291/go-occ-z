@@ -8,6 +8,9 @@ permissions:
   contents: read
 jobs:
   test:
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
