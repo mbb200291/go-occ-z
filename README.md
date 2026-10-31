@@ -17,7 +17,8 @@ go get github.com/mbb200291/go-occ-z/occ
 
 ## Quick start
 
-Implement a `TargetAdapter` for your storage, then share one manager across goroutines.
+Implement a `TargetAdapter` for your storage and a `Command` for each operation,
+then share one manager across goroutines.
 Each `Run` executes its commands as one transaction. Commands read and write through
 Context and return their result directly.
 
@@ -62,6 +63,27 @@ func incrementCounter(adapter occ.TargetAdapter) error {
 Create the manager once and reuse it. Targets can be chosen during execution;
 `GetData` and `SetData` track the reads and writes. Results follow command order.
 Return `nil, nil` when a command has no result.
+
+## Implement Command
+
+Your command type must implement this method (as `Increment` does above):
+
+```go
+type Command interface {
+    Execute(ctx occ.Context) (any, error)
+}
+
+var _ occ.Command = Increment{}
+```
+
+- Read through `ctx.GetData(target)` and stage writes with `ctx.SetData(target, value)`.
+  Targets can be chosen dynamically; you do not declare read/write sets yourself.
+- Return an outcome, or `nil` if none is needed. `Run` returns successful outcomes
+  in command order, after the transaction succeeds.
+- Propagate read and execution errors. Commands may run again after a conflict,
+  so keep transaction state in Context and avoid external side effects.
+- If the same command instance is used concurrently, its own fields must be safe
+  for concurrent access. Prefer immutable inputs and local variables.
 
 ## Implement TargetAdapter
 
