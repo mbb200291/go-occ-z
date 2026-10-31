@@ -1,10 +1,8 @@
-<!-- pohw-badges:start -->
+[![Unit tests](https://github.com/mbb200291/go-occ-z/actions/workflows/test.yml/badge.svg?branch=dev)](https://github.com/mbb200291/go-occ-z/actions/workflows/test.yml) <!-- pohw-badges:start -->
 [![PoHW Editing Evidence Score](https://raw.githubusercontent.com/mbb200291/go-occ-z/pohw-badges/editing.svg)](https://github.com/mbb200291/go-occ-z/blob/pohw-badges/REPORT.md) [![PoHW Monitored Coverage](https://raw.githubusercontent.com/mbb200291/go-occ-z/pohw-badges/coverage.svg)](https://github.com/mbb200291/go-occ-z/blob/pohw-badges/REPORT.md)
 <!-- pohw-badges:end -->
 
 # go-occ-z
-
-[![Unit tests](https://github.com/mbb200291/go-occ-z/actions/workflows/test.yml/badge.svg?branch=dev)](https://github.com/mbb200291/go-occ-z/actions/workflows/test.yml)
 
 Optimistic concurrency control for Go, using backward validation.
 Based on [CMU Lecture #18](https://15445.courses.cs.cmu.edu/fall2024/schedule.html).
