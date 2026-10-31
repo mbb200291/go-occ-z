@@ -3,7 +3,6 @@ package occ
 import (
 	"errors"
 	"fmt"
-	"github.com/mbb200291/go-occ-z/occ/internal/core"
 	"os"
 	"os/exec"
 	"strconv"
@@ -11,6 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/mbb200291/go-occ-z/occ/internal/core"
 )
 
 type memoryAdapter struct {
@@ -63,11 +64,15 @@ func increment(k string) Command {
 	})
 }
 
-func testManager(t *testing.T) (*occManager, *memoryAdapter) {
+func testManager(t *testing.T, observers ...Observer) (*occManager, *memoryAdapter) {
 	t.Helper()
 	t.Chdir(t.TempDir())
 	a := &memoryAdapter{values: map[string]int{"x": 0, "y": 0}}
-	mgr, err := NewManager(a, Config{Retry: &RetryOptions{MaxRetries: 0, BaseDelay: time.Nanosecond, MaxDelay: time.Nanosecond}})
+	var observe Observer
+	if len(observers) > 0 {
+		observe = observers[0]
+	}
+	mgr, err := NewManager(a, Config{Observer: observe, Retry: &RetryOptions{MaxRetries: 0, BaseDelay: time.Nanosecond, MaxDelay: time.Nanosecond}})
 	if err != nil {
 		t.Fatal(err)
 	}

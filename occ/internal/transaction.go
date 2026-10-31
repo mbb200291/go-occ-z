@@ -10,8 +10,9 @@ import (
 )
 
 type OccTransaction struct {
-	id   string
-	cmds []core.Command
+	Observer core.Observer
+	id       string
+	cmds     []core.Command
 
 	readTime     atomic.Uint64
 	writeTime    atomic.Uint64
@@ -99,3 +100,5 @@ func (txn *OccTransaction) GetWriteData(target string) any {
 	data, _ := txn.ctx.GetData(target)
 	return data
 }
+
+func (txn *OccTransaction) GetObserver() core.Observer { return txn.Observer }

@@ -65,6 +65,7 @@ type Manager interface {
 type occManager struct {
 	runMu        sync.RWMutex
 	lock         *flock.Flock
+	observer     Observer
 	retryOptions RetryOptions
 	prevTxn      core.TransactionContainer
 	ongoingTxn   core.TransactionContainer
@@ -96,6 +97,9 @@ func NewManager(adpt TargetAdapter, configs ...Config) (*occManager, error) {
 		prevTxn:      imp.NewTransactionContainer(imp.NewSkipMap(), func(txn core.Transaction) uint64 { return txn.GetValidateTime() }),
 		ongoingTxn:   imp.NewTransactionContainer(imp.NewSkipMap(), func(txn core.Transaction) uint64 { return txn.GetReadTime() }),
 		adpt:         adpt,
+	}
+	if len(configs) == 1 {
+		manager.observer = configs[0].Observer
 	}
 	if err := manager.recovery(); err != nil {
 		return nil, errors.Join(fmt.Errorf("%w: recovery: %w", ErrIniManager, err), lock.Close())
@@ -141,6 +145,7 @@ func (mgr *occManager) runOnce(cmds []Command) ([]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrIniTxn, err)
 	}
+	txn.Observer = mgr.observer
 	if outcomes, err = core.Process(txn, ctx, mgr.adpt, cmds, mgr.prevTxn, mgr.ongoingTxn); err != nil {
 		return nil, err
 	}
@@ -161,6 +166,8 @@ type RetryOptions = core.RetryOptions
 type Config struct {
 	// Retry replaces all retry defaults when non-nil. Numeric fields must be valid.
 	Retry *RetryOptions
+	// Observer receives events from all attempts. Nil disables notifications.
+	Observer Observer
 }
 
 func resolveConfig(configs []Config) (RetryOptions, error) {

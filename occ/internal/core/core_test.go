@@ -263,3 +263,5 @@ func TestRecoveryAfterProcessExit(t *testing.T) {
 		t.Fatal(a.values)
 	}
 }
+
+func (t *testTxn) GetObserver() Observer { return nil }

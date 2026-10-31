@@ -26,11 +26,13 @@ func Validate(curTxn Transaction, prevTxns TransactionContainer, minReadTimeOgTx
 			}
 			pass = pass && validatePair(prevTxn, curTxn)
 			if !pass {
+				trace("blocked", curTxn, prevTxn.GetID(), nil)
 				return false
 			}
 			// remove txn which write time early than onging txn's read time
 			if prevTxn.GetWriteTime() < minReadTimeOgTxns {
 				prevTxns.Remove(prevTxn)
+				trace("purge", curTxn, prevTxn.GetID(), nil)
 			}
 			return true
 		},

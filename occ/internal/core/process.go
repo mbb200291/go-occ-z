@@ -43,7 +43,7 @@ func retryWait(delay time.Duration, jitter bool) time.Duration {
 
 // prevTxn should use validate time as key
 // ongoingTxn should use read time as key
-func Process(txn Transaction, ctx Context, adpt TargetAdapter, cmds []Command, prevTxns, ongoingTxns TransactionContainer) ([]any, error) {
+func Process(txn Transaction, ctx Context, adpt TargetAdapter, cmds []Command, prevTxns, ongoingTxns TransactionContainer) (results []any, resultErr error) {
 	// ensure write time is max
 	txn.SetWriteTime(uint64(math.MaxInt64))
 
@@ -56,7 +56,15 @@ func Process(txn Transaction, ctx Context, adpt TargetAdapter, cmds []Command, p
 	muR.Unlock()         // [-] unlock
 
 	// unregister txn from ongoing T after txn complete
-	defer ongoingTxns.Remove(txn)
+	defer func() {
+		ongoingTxns.Remove(txn)
+		if p := recover(); p != nil {
+			trace("end", txn, "", fmt.Errorf("transaction panic: %v", p))
+			panic(p)
+		}
+		trace("end", txn, "", resultErr)
+	}()
+	trace("read", txn, "", nil)
 
 	// execute transaction
 	outcomes, err := Execute(ctx, cmds)
@@ -72,6 +80,7 @@ func Process(txn Transaction, ctx Context, adpt TargetAdapter, cmds []Command, p
 	// add txn to prevTxn
 	prevTxns.Add(txn)
 	muV.Unlock() // [-] unlock
+	trace("validate", txn, "", nil)
 
 	// prepare purge write time till to
 	minTxnReadTime := uint64(math.MaxInt64)
@@ -82,19 +91,23 @@ func Process(txn Transaction, ctx Context, adpt TargetAdapter, cmds []Command, p
 	// run validate
 	if outcome := Validate(txn, prevTxns, minTxnReadTime); !outcome {
 		prevTxns.Remove(txn)
+		trace("conflict", txn, "", ErrConflict)
 		return nil, ErrConflict
 	}
 
 	// write phase -- finalize changes to production zone
 	if txn.GetWriteSet().Size() > 0 {
+		trace("commit", txn, "", nil)
 		err = Commit(txn, adpt)
 
 		if err != nil {
 			err = fmt.Errorf("%w : %w", ErrCommit, err)
+			trace("rollback", txn, "", err)
 			committed, wErr := Withdraw(txn.GetID(), adpt)
 			if committed {
 				// commit had been success
 				txn.SetWriteTime(NextTimestamp())
+				trace("write", txn, "", nil)
 				return outcomes, nil
 			}
 			if wErr != nil {
@@ -109,6 +122,7 @@ func Process(txn Transaction, ctx Context, adpt TargetAdapter, cmds []Command, p
 	}
 
 	txn.SetWriteTime(NextTimestamp())
+	trace("write", txn, "", nil)
 
 	return outcomes, nil
 }
@@ -139,6 +153,7 @@ type Set interface {
 type TimeStamp comparable
 
 type Transaction interface {
+	GetObserver() Observer
 	GetID() string
 
 	GetReadTime() uint64     // readtime will init as inf
