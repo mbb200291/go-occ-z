@@ -10,6 +10,16 @@
 
 Early release. Production use requires further validation.
 
+## How it works
+
+![OCC architecture](docs/assets/architecture.svg)
+
+Transactions read data, compute private changes, check for conflicts, and commit.
+The containers track active attempts and earlier transactions. Reads happen on
+demand during computation. Conflicts retry with fresh state.
+
+[Architecture details](docs/architecture.md)
+
 ## Quick start
 
 ```sh
@@ -200,4 +210,4 @@ Above 1 means faster. The baseline uses the same OCC Manager with one worker.
 
 [Results, raw data, and configuration](https://github.com/mbb200291/go-occ-z-usecase/tree/main/matrix-demo/benchmark-results/2026-10-31-delay100ms-workers20).
 
-[Release notes](CHANGELOG.md) · [MIT license](LICENSE)
+[Architecture](docs/architecture.md) · [Release notes](CHANGELOG.md) · [MIT license](LICENSE)
