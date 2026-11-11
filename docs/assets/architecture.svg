@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="520" viewBox="0 0 1120 520" role="img" aria-labelledby="title desc">
+  <title id="title">OCC architecture</title>
+  <desc id="desc">A transaction container sits above the main flow: Read Files, Compute, Conflict Check, and Commit Changes. It tracks active transactions and previous transactions. Conflicts retry with fresh data.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M1 1L8 5L1 9" fill="none" stroke="#526681" stroke-width="1.5"/></marker>
+    <style>
+      text { font-family: Arial, Helvetica, sans-serif; fill: #22334b; }
+      .label { font-size: 22px; font-weight: 600; text-anchor: middle; }
+      .small { font-size: 16px; fill: #526681; text-anchor: middle; }
+      .line { fill: none; stroke: #526681; stroke-width: 2; marker-end: url(#arrow); }
+      .box { fill: #fff; stroke: #c6d2e1; stroke-width: 1.5; }
+    </style>
+  </defs>
+  <rect width="1120" height="520" rx="16" fill="#f6f8fb"/>
+
+  <rect x="330" y="32" width="460" height="180" rx="12" class="box"/>
+  <text x="560" y="69" class="label">Transaction Container</text>
+  <rect x="350" y="92" width="200" height="96" rx="8" fill="#edf3fc"/>
+  <rect x="570" y="92" width="200" height="96" rx="8" fill="#edf3fc"/>
+  <text x="450" y="122" class="label">Active</text>
+  <text x="670" y="122" class="label">History</text>
+  <text x="450" y="151" class="small">Ordered by read time</text>
+  <text x="670" y="151" class="small">Ordered by validation</text>
+  <text x="450" y="174" class="small">Track running attempts</text>
+  <text x="670" y="174" class="small">Scan earlier transactions</text>
+
+  <path d="M150 310V247H400V215" class="line"/>
+  <text x="250" y="237" class="small">Register</text>
+  <path d="M670 215V307" class="line"/>
+  <text x="731" y="267" class="small">Compare</text>
+
+  <rect x="40" y="310" width="220" height="104" rx="10" class="box"/>
+  <text x="150" y="351" class="label">Read Files</text>
+  <text x="150" y="382" class="small">Load through adapter</text>
+
+  <rect x="310" y="310" width="220" height="104" rx="10" class="box"/>
+  <text x="420" y="351" class="label">Compute</text>
+  <text x="420" y="382" class="small">Stage private changes</text>
+
+  <rect x="580" y="310" width="220" height="104" rx="10" class="box"/>
+  <text x="690" y="351" class="label">Conflict Check</text>
+  <text x="690" y="382" class="small">Validate dependencies</text>
+
+  <rect x="850" y="310" width="230" height="104" rx="10" fill="#edf6f1" stroke="#a9cbbb" stroke-width="1.5"/>
+  <text x="965" y="351" class="label">Commit Changes</text>
+  <text x="965" y="382" class="small">Backup · Journal · Write</text>
+
+  <path d="M262 362H306" class="line"/>
+  <path d="M532 362H576" class="line"/>
+  <path d="M802 362H846" class="line"/>
+  <text x="825" y="342" class="small">Pass</text>
+  <path d="M690 417V464H150V417" class="line" stroke-dasharray="6 5"/>
+  <rect x="327" y="451" width="186" height="26" fill="#f6f8fb"/>
+  <text x="420" y="470" class="small">Conflict → Retry</text>
+</svg>
