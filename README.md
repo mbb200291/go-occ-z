@@ -31,59 +31,83 @@ Requires Go 1.25 or newer.
 Implement a `TargetAdapter` for storage and a `Command` for each operation.
 Share one manager across goroutines. Each `Run` executes its commands as one transaction.
 
-This example expects an existing `counter` target containing an `int64`:
+This example runs two XOR commands concurrently on an existing `bit` target.
+The adapter stores it as a `uint8`, initially `0`. After both transactions succeed,
+its value is `0 ^ 1 ^ 1 = 0`.
 
 ```go
 import (
+    "errors"
     "fmt"
 
     "github.com/mbb200291/go-occ-z/occ"
 )
 
-type Increment struct{ Target string }
+type XOR struct {
+    Target string
+    Mask   uint8
+}
 
-func (c Increment) Execute(ctx occ.Context) (any, error) {
+func (c XOR) Execute(ctx occ.Context) (any, error) {
     data, err := ctx.GetData(c.Target)
     if err != nil {
         return nil, err
     }
-    value, ok := data.(int64)
-    if !ok || value == int64(1<<63-1) {
-        return nil, fmt.Errorf("target %q: invalid counter or overflow", c.Target)
+    value, ok := data.(uint8)
+    if !ok {
+        return nil, fmt.Errorf("target %q: expected uint8", c.Target)
     }
-    ctx.SetData(c.Target, value+1)
-    return value + 1, nil
+    value ^= c.Mask
+    ctx.SetData(c.Target, value)
+    return value, nil
 }
 
-func incrementCounter(adapter occ.TargetAdapter) error {
+func xorTwice(adapter occ.TargetAdapter) error {
     manager, err := occ.NewManager(adapter)
     if err != nil {
         return err
     }
-    outcomes, err := manager.Run([]occ.Command{Increment{Target: "counter"}})
-    if err != nil {
-        return err
+    done := make(chan error, 2)
+    for range 2 {
+        go func() {
+            _, err := manager.Run([]occ.Command{XOR{Target: "bit", Mask: 1}})
+            done <- err
+        }()
     }
-    fmt.Println(outcomes[0])
-    return nil
+    return errors.Join(<-done, <-done) // Wait for both transactions.
 }
 ```
 
-Targets can be chosen during execution. Context tracks their read and write dependencies.
+Each goroutine starts a separate transaction. If they conflict, OCC retries.
+Commands passed together to a single `Run` execute sequentially in one transaction.
+
+### Context during execution
+
+Inside `Execute`, use Context for all transaction reads and writes:
+
+| Method | Behavior |
+| --- | --- |
+| `GetData(target)` | Reads through the adapter when no private value exists. A successful read adds the target to the read set. |
+| `SetData(target, value)` | Stores a private value and adds the target to the write set. Storage changes during commit, after validation. |
+
+Later reads return the private value, including staged writes. Calling `SetData`
+first does not read the original value. Targets can be chosen during execution.
+
+Commands in one `Run` share a Context. Retries get a fresh one. Use it only during
+`Execute`, propagate read errors, and write only to existing targets.
 
 ## Implement Command
 
-Implement `Execute`, as shown by `Increment` above:
+Implement `Execute`, as shown by `XOR` above:
 
 ```go
 type Command interface {
     Execute(ctx occ.Context) (any, error)
 }
 
-var _ occ.Command = Increment{}
+var _ occ.Command = XOR{}
 ```
 
-- Access data through `ctx.GetData(target)` and `ctx.SetData(target, value)`.
 - Return an outcome or `nil`. `Run` returns successful outcomes in command order.
 - Propagate errors. Commands may retry, so keep transaction data in Context
   and avoid external side effects.
