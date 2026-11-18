@@ -91,12 +91,10 @@ func Process(txn Transaction, ctx Context, adpt TargetAdapter, cmds []Command, p
 
 		if err != nil {
 			err = fmt.Errorf("%w : %w", ErrCommit, err)
-			committed, wErr := Withdraw(txn.GetID(), adpt)
-			if committed {
-				// commit had been success
-				txn.SetWriteTime(NextTimestamp())
-				return outcomes, nil
+			if errors.Is(err, ErrCommitUncertain) {
+				panic(err) // The backup has been unlinked. Stop and recover on restart.
 			}
+			wErr := Withdraw(txn.GetID(), adpt)
 			if wErr != nil {
 				// encounter rollback fail, throw panic.
 				// System should recovery by run tidyup
@@ -132,7 +130,7 @@ func init() {
 type Set interface {
 	IsDisjoint(Set) bool
 	Contains(string) bool
-	All() iter.Seq[string]
+	All() iter.Seq2[string, bool]
 	Size() int
 }
 
@@ -152,7 +150,7 @@ type Transaction interface {
 	GetWriteSet() Set
 	GetReadSet() Set
 
-	GetWriteData(string) any
+	GetData(string) any
 }
 
 type TransactionContainer interface {

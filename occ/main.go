@@ -19,6 +19,10 @@ type TargetAdapter = core.TargetAdapter
 
 var ErrConflict = core.ErrConflict
 var ErrCommit = core.ErrCommit
+
+// ErrCommitUncertain identifies a panic after backup removal could not be synced.
+// Stop processing transactions and recover on restart.
+var ErrCommitUncertain = core.ErrCommitUncertain
 var ErrExecute = core.ErrExecute
 var ErrRead = core.ErrRead
 var ErrRollback = core.ErrRollback
@@ -114,8 +118,7 @@ func (mgr *occManager) runOnce(cmds []Command) ([]any, error) {
 }
 
 func (mgr *occManager) recovery() error {
-	_, err := core.Recovery(mgr.adpt)
-	return err
+	return core.Recovery(mgr.adpt)
 }
 
 type RetryOptions = core.RetryOptions

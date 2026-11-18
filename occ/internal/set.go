@@ -6,16 +6,14 @@ import (
 	occ "github.com/mbb200291/go-occ-z/occ/internal/core"
 )
 
-type Set map[string]struct{}
+type Set map[string]bool
 
 func NewSet() Set {
 	return make(Set)
 }
 
-func (s Set) Add(keys []string) {
-	for _, key := range keys {
-		s[key] = struct{}{}
-	}
+func (s Set) Add(key string, exists bool) {
+	s[key] = exists
 }
 
 func (s Set) Remove(key string) {
@@ -36,10 +34,10 @@ func (s Set) IsDisjoint(other occ.Set) bool {
 	return true
 }
 
-func (s Set) All() iter.Seq[string] {
-	return func(yield func(string) bool) {
-		for key := range s {
-			if !yield(key) {
+func (s Set) All() iter.Seq2[string, bool] {
+	return func(yield func(string, bool) bool) {
+		for key, exists := range s {
+			if !yield(key, exists) {
 				return
 			}
 		}

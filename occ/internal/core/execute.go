@@ -20,8 +20,9 @@ type Command interface {
 
 // Data should only access and store on context object, should not directly access original source.
 type Context interface {
-	GetData(string) (any, error)
-	SetData(string, any)
+	ReadData(string) (any, bool, error) // for purpose to "get" target data
+	SetData(string, any) error          // for purpose to "update" a exist target with data. Update on a not exist target is not allowed. Create target action after update also forbiden unless detele happen.
+	DeleteData(string) error            // for purpose to "delete" a target with data
 
 	GetWriteSet() Set
 	GetReadSet() Set

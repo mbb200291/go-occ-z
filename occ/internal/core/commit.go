@@ -2,342 +2,228 @@ package core
 
 import (
 	"bufio"
-	"bytes"
-	"encoding/base32"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"iter"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-// Commit writes the transaction and returns failures without rolling back.
-// The caller controls rollback and handles rollback failures.
-func Commit(txn Transaction, adpt TargetAdapter) error {
-	for target := range txn.GetWriteSet().All() {
-		// backup target
-		ori, err := adpt.Read(target) // TODO: handle new file create and remove
-		if err != nil {
-			return err
-		}
-		oriB, err := adpt.Serialize(ori)
-		if err != nil {
-			return err
-		}
-		if err := saveBackup(txn.GetID(), target, oriB); err != nil {
-			return err
-		}
+const backupSuffix = ".jsonl"
 
-		// write log first, even target not been write -> idempotent recover by backup
-		if err := appendLog(txn.GetID(), "WRITE", target); err != nil {
-			return err
-		}
+var ErrCommitUncertain = errors.New("occ: commit durability uncertain")
 
-		// write target
-		if err := adpt.Write(target, txn.GetWriteData(target)); err != nil {
-			return err
-		}
+type BackupFileHandler struct {
+	txnId string
+}
+
+type BackupEntry struct {
+	Exist   bool
+	Content []byte
+	Target  string
+}
+
+func NewBackupFileHandler(txnId string) *BackupFileHandler {
+	return &BackupFileHandler{
+		txnId: txnId,
 	}
+}
 
-	// write COMMIT log
-	if err := appendLog(txn.GetID(), "COMMIT", ""); err != nil {
+func (bfh *BackupFileHandler) path() string {
+	return filepath.Join(".occ", bfh.txnId+backupSuffix)
+}
+
+// SaveBackup appends one record. Call Sync before changing its target.
+// A handler is used by one transaction at a time.
+func (bfh *BackupFileHandler) SaveBackup(target string, exist bool, content []byte) error {
+	if err := os.MkdirAll(".occ", 0755); err != nil {
 		return err
-
 	}
+	file, err := os.OpenFile(bfh.path(), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	err = json.NewEncoder(file).Encode(BackupEntry{Target: target, Exist: exist, Content: content})
+	return errors.Join(err, file.Close())
+}
 
-	// remove txn backup folder
-	go func() {
-		if err := cleanup(txn.GetID()); err != nil {
-			log.Printf("failed to clean txn backups %s: %v", txn.GetID(), err)
+func syncBackupPath(path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	err = file.Sync()
+	return errors.Join(err, file.Close())
+}
+
+func (bfh *BackupFileHandler) Sync() error {
+	// Persist both file contents and the directory entries that locate them.
+	for _, path := range []string{bfh.path(), ".occ", "."} {
+		if err := syncBackupPath(path); err != nil {
+			return fmt.Errorf("sync %q: %w", path, err)
 		}
-	}()
-
+	}
 	return nil
 }
 
-// Withdraw restores uncommitted targets and reports whether a complete COMMIT was found.
-func Withdraw(txnId string, adpt TargetAdapter) (committed bool, err error) {
-	// load log files, determine target to revert
-	revertTargets, committed, err := loadTargetsToRevert(txnId)
-	if err != nil {
-		return false, err
+func (bfh *BackupFileHandler) RemoveBackups() error {
+	if err := os.Remove(bfh.path()); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
 	}
+	if err := syncBackupPath(".occ"); err != nil {
+		return fmt.Errorf("%w: sync backup deletion: %w", ErrCommitUncertain, err)
+	}
+	return nil
+}
 
-	if committed {
-		log.Printf(
-			"txn %s commited, but maybe fail to remove log", txnId,
-		)
-	} else {
-		for target := range revertTargets {
-			// Load backup
-			orib, err := loadBackup(txnId, target)
+func (bfh *BackupFileHandler) LoadBackups() iter.Seq2[*BackupEntry, error] {
+	return func(yield func(*BackupEntry, error) bool) {
+		file, err := os.Open(bfh.path())
+		if os.IsNotExist(err) {
+			return
+		}
+		if err != nil {
+			yield(nil, err)
+			return
+		}
+		defer file.Close()
+		reader := bufio.NewReader(file)
+		for {
+			line, err := reader.ReadBytes('\n')
+			// An unfinished last record was never followed by a successful Sync.
+			if errors.Is(err, io.EOF) {
+				return
+			}
 			if err != nil {
-				return committed, fmt.Errorf(
-					"failed to load backup for %q: %w",
-					target, err,
-				)
+				yield(nil, err)
+				return
 			}
+			var entry BackupEntry
+			if err := json.Unmarshal(line, &entry); err != nil {
+				yield(nil, fmt.Errorf("decode backup entry: %w", err))
+				return
+			}
+			if !yield(&entry, nil) {
+				return
+			}
+		}
+	}
+}
 
-			ori, err := adpt.UnSerialize(orib)
+// Commit writes the transaction and returns failures without rolling back.
+// The caller controls rollback and handles rollback failures.
+func Commit(txn Transaction, adpt TargetAdapter) error {
+	bfh := NewBackupFileHandler(txn.GetID())
+
+	for target, newExists := range txn.GetWriteSet().All() {
+		// backup target
+		ori, oldExists, err := adpt.Read(target)
+		if err != nil {
+			return err
+		}
+		if !oldExists && newExists { // CREAT
+			if err := bfh.SaveBackup(target, false, nil); err != nil {
+				return err
+			}
+		} else if oldExists { // UPDATE or DELETE
+			oriB, err := adpt.Serialize(ori)
 			if err != nil {
-				return committed, fmt.Errorf(
-					"failed to unserialize backup for %q: %w",
-					target, err,
-				)
+				return err
 			}
+			if err := bfh.SaveBackup(target, true, oriB); err != nil {
+				return err
+			}
+		} else {
+			continue // The target is already absent.
+		}
 
-			// revert target
-			if err := adpt.Write(target, ori); err != nil {
-				return committed, fmt.Errorf(
-					"failed to revert target %q: %w",
-					target, err,
-				)
+		if err = bfh.Sync(); err != nil {
+			err = fmt.Errorf("sync transaction backup: %w", err) // TODO
+			return err
+		}
+
+		// make change
+		if newExists {
+			if err := adpt.Write(target, txn.GetData(target)); err != nil {
+				return err
 			}
-			if err := appendLog(txnId, "REVERT", target); err != nil {
-				return committed, err
-			}
-			if err := discardBackup(txnId, target); err != nil {
-				return committed, err
+		} else {
+			if err := adpt.Delete(target); err != nil {
+				return err // if target not exist in source, skip it
 			}
 		}
 	}
 
-	// remove txn data
-	if err := cleanup(txnId); err != nil {
-		log.Printf("failed to remove txn data %s: %v", txnId, err)
-		return committed, err // keep remaining state for another recovery
-	}
-
-	return committed, nil
+	// Removing the backup is the commit point.
+	return bfh.RemoveBackups()
 }
 
+// Withdraw restores targets from backup entries.
+func Withdraw(txnId string, adpt TargetAdapter) error {
+	bfh := NewBackupFileHandler(txnId)
+	for backEntry, err := range bfh.LoadBackups() {
+		if err != nil {
+			return err
+		}
+		target := backEntry.Target
+		if !backEntry.Exist {
+			if err := adpt.Delete(target); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("failed to revert created target %q: %w", target, err)
+			}
+			continue
+		}
+		ori, err := adpt.UnSerialize(backEntry.Content)
+		if err != nil {
+			return fmt.Errorf("failed to unserialize backup for %q: %w", target, err)
+		}
+		if err := adpt.Write(target, ori); err != nil {
+			return fmt.Errorf("failed to revert target %q: %w", target, err)
+		}
+	}
+	return bfh.RemoveBackups()
+}
+
+// TargetAdapter reads and changes targets. Read reports a missing target as
+// (nil, false, nil). Write must create or replace. Delete must tolerate a
+// missing target, including during recovery.
+// For power-loss recovery, successful Write and Delete calls must persist
+// their changes, including any directory entries they create or remove.
 type TargetAdapter interface {
-	Read(string) (any, error)
+	Read(string) (any, bool, error)
 	Write(string, any) error
+	Delete(string) error
 	Serialize(any) ([]byte, error)
 	UnSerialize([]byte) (any, error)
 }
 
-// Read unfinished txn in txn logs and carry on undone txn rollback works
-// Return txnID with success "COMMIT" log
-func Recovery(adpt TargetAdapter) ([]string, error) {
+// Recovery restores transactions whose backup files are still present.
+func Recovery(adpt TargetAdapter) error {
 	entries, err := os.ReadDir(".occ")
-	if os.IsNotExist(err) {
-		return nil, nil
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
 	}
 	if err != nil {
-		return nil, err
+		return err
 	}
-	var successTxnIds []string
 	var errs []error
 	for _, entry := range entries {
 		if entry.Name() == ".occ.lock" {
 			continue
 		}
-		txnId := entry.Name()
-		if !entry.IsDir() {
-			errs = append(errs, fmt.Errorf("invalid transaction directory %q", entry.Name()))
+		txnId, ok := strings.CutSuffix(entry.Name(), backupSuffix)
+		if !ok || txnId == "" || !entry.Type().IsRegular() {
+			errs = append(errs, fmt.Errorf("unsupported entry in .occ: %q", entry.Name()))
 			continue
 		}
-		committed, err := Withdraw(txnId, adpt)
-		if committed {
-			successTxnIds = append(successTxnIds, txnId)
-		}
-		if err != nil {
+		if err := Withdraw(txnId, adpt); err != nil {
 			errs = append(errs, fmt.Errorf("recover transaction %s: %w", txnId, err))
 		}
 	}
-	return successTxnIds, errors.Join(errs...)
-}
-
-func transactionDir(txnId string) string { return filepath.Join(".occ", txnId) }
-func journalPath(txnId string) string    { return filepath.Join(transactionDir(txnId), "journal") }
-func backupPath(txnId, target string) string {
-	return filepath.Join(transactionDir(txnId), "backup", encodeTarget(target))
-}
-
-func discardBackup(txnId, target string) error {
-	if err := os.Remove(backupPath(txnId, target)); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	return nil
-}
-
-var pathEncoding = base32.StdEncoding.WithPadding(base32.NoPadding)
-
-func encodeTarget(target string) string {
-	return "x_" + pathEncoding.EncodeToString([]byte(target))
-}
-
-func decodeTarget(encoded string) (string, error) {
-	if !strings.HasPrefix(encoded, "x_") {
-		return "", fmt.Errorf("invalid encoded target: %q", encoded)
-	}
-
-	data, err := pathEncoding.DecodeString(encoded[2:])
-	return string(data), err
-}
-
-func saveBackup(txnId, target string, data []byte) error {
-	path := backupPath(txnId, target)
-
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-
-	file, err := os.OpenFile(
-		path,
-		os.O_CREATE|os.O_EXCL|os.O_WRONLY,
-		0644,
-	)
-	if err != nil {
-		return err
-	}
-
-	if _, err := file.Write(data); err != nil {
-		_ = file.Close()
-		return err
-	}
-
-	if err := file.Sync(); err != nil {
-		_ = file.Close()
-		return err
-	}
-
-	return file.Close()
-}
-
-func loadBackup(txnId, target string) ([]byte, error) {
-	path := backupPath(txnId, target)
-	return os.ReadFile(path)
-}
-
-func loadTargetsToRevert(txnId string) (map[string]bool, bool, error) {
-	path := journalPath(txnId)
-	revertTargets := make(map[string]bool)
-
-	file, err := os.OpenFile(path, os.O_RDWR, 0)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return revertTargets, false, nil
-		}
-		return nil, false, err
-	}
-	defer file.Close()
-
-	data, err := io.ReadAll(file)
-	if err != nil {
-		return nil, false, err
-	}
-	// Parse only newline-terminated records. Validate them before changing disk.
-	end := bytes.LastIndexByte(data, '\n') + 1
-	committed := false
-	reader := bufio.NewScanner(bytes.NewReader(data[:end]))
-	reader.Buffer(make([]byte, 4096), len(data)+1)
-	for reader.Scan() {
-		line := reader.Text()
-		line = strings.TrimSuffix(line, "\n")
-		line = strings.TrimSuffix(line, "\r")
-
-		if committed {
-			return nil, false, fmt.Errorf(
-				"unexpected log after COMMIT: %q", line,
-			)
-		}
-
-		if strings.TrimSpace(line) == "COMMIT" {
-			committed = true
-			continue
-		}
-
-		action, targetR, ok := strings.Cut(line, " ")
-		if !ok || targetR == "" {
-			return nil, false, fmt.Errorf(
-				"invalid log entry: %q", line,
-			)
-		}
-		target, err := decodeTarget(targetR)
-		if err != nil {
-			return nil, false, fmt.Errorf(
-				"invalid log entry: %q", line,
-			)
-		}
-		switch action {
-		case "WRITE":
-			revertTargets[target] = true
-		case "REVERT":
-			delete(revertTargets, target)
-		default:
-			return nil, false, fmt.Errorf(
-				"unknown log action: %q", action,
-			)
-		}
-	}
-
-	if err := reader.Err(); err != nil {
-		return nil, false, err
-	}
-	if end < len(data) {
-		if err := truncateLogTail(file, int64(end)); err != nil {
-			return nil, false, err
-		}
-	}
-
-	return revertTargets, committed, nil
-}
-
-// Recovery requires exclusive access to this transaction's log. Sync the
-// truncation before restoring data or appending further recovery records.
-func truncateLogTail(file *os.File, size int64) error {
-	if err := file.Truncate(size); err != nil {
-		return fmt.Errorf("truncate incomplete transaction log: %w", err)
-	}
-	if err := file.Sync(); err != nil {
-		return fmt.Errorf("sync truncated transaction log: %w", err)
-	}
-	return nil
-}
-
-func appendLog(txnId, action, target string) error {
-	if err := os.MkdirAll(transactionDir(txnId), 0755); err != nil {
-		return err
-	}
-
-	path := journalPath(txnId)
-
-	file, err := os.OpenFile(
-		path,
-		os.O_CREATE|os.O_APPEND|os.O_WRONLY,
-		0644,
-	)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	line := action + "\n"
-	if action != "COMMIT" {
-		line = action + " " + encodeTarget(target) + "\n"
-	}
-	if _, err := file.WriteString(line); err != nil {
-		return err
-	}
-
-	return file.Sync()
-}
-
-// Retain the journal until backups are removed
-func cleanup(txnId string) error {
-	if err := os.RemoveAll(filepath.Join(transactionDir(txnId), "backup")); err != nil {
-		return err
-	}
-	if err := os.Remove(journalPath(txnId)); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	if err := os.Remove(transactionDir(txnId)); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	return nil
+	return errors.Join(errs...)
 }
